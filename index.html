@@ -109,11 +109,12 @@ function computeStats(cls, spec, level, heroBlessing, bonusStats) {
 
   // Permanent bumps from statBonus grants (Background features, learned
   // items like Tome of Mana Bolt — see gatherAllGrants/collectStatBonuses
-  // below). Mana only applies to classes that already have a Mana pool,
-  // same restriction the item text itself uses ("can only be drunk by
-  // characters with Mana" on the Flask of the Moon).
+  // below). A non-caster class has no Mana track at all (mana stays
+  // null) until something actually grants Mana — at which point it opens
+  // one starting from a base of 0, so e.g. a Warrior who learns the Tome
+  // of Mana Bolt ends up with 1 max Mana instead of staying null.
   if (bonusStats) {
-    if (mana != null && bonusStats.mana) mana += bonusStats.mana;
+    if (bonusStats.mana) mana = (mana != null ? mana : 0) + bonusStats.mana;
     if (bonusStats.health) health += bonusStats.health;
     if (bonusStats.armor) armor += bonusStats.armor;
     if (bonusStats.speed) speed += bonusStats.speed;
