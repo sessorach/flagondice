@@ -19,8 +19,9 @@
     "skillChoices": [
       { "options": ["Convince", "Expertise"] }
     ],
-    "features": [
-      { "name": "Mana Bolt", "text": "As a Main Action, you can make an attack with a Range of 3, 2d6 to hit, dealing 2d6 damage on a hit. This is free to use the first time each encounter, after that it costs 1 Mana." }
+    "features": [],
+    "bonusTrainingGrants": [
+      { "trainingId": "mana-bolt", "freeCasts": 1, "manaCost": 1 }
     ]
   },
   {

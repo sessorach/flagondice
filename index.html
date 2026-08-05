@@ -84,7 +84,7 @@ const MAX_SKILL_PIPS = 5;
 const STAT_ONLY_NAMES = new Set(["Health", "Armor", "Speed", "Mana", "Range", "Armor & Health", "Stats", "Armor, Health & Mana"]);
 const STAT_ONLY_LINE = /^Your (Health|Armor|Speed|Mana) (increases|is (increased|reduced))\b/i;
 
-function computeStats(cls, spec, level, heroBlessing) {
+function computeStats(cls, spec, level, heroBlessing, bonusManaMax) {
   if (!cls) return { health: 0, armor: 0, speed: 0, mana: null };
   let health = cls.stats.health, armor = cls.stats.armor, speed = cls.stats.speed, mana = cls.stats.mana;
 
@@ -107,9 +107,39 @@ function computeStats(cls, spec, level, heroBlessing) {
     if (heroBlessing === "speed") speed += 1;
   }
 
+  // Permanent Mana bumps from learned bonus-training items (e.g. Tome of
+  // Mana Bolt) — only applies to classes that already have a Mana pool,
+  // same restriction the item text itself uses ("can only be drunk by
+  // characters with Mana" on the Flask of the Moon).
+  if (mana != null && bonusManaMax) mana += bonusManaMax;
+
   armor = Math.max(2, Math.min(6, armor));
   speed = Math.max(1, speed);
   return { health, armor, speed, mana };
+}
+
+// ── Bonus trainings/spells — a shared pool (data/bonus-trainings.json)
+// that isn't tied to any one class. A Background can grant free casts of
+// one per encounter; an item can permanently teach one for Mana instead.
+// Multiple sources granting the same one stack: free casts add up, and
+// the cheapest Mana cost among them applies.
+function collectBonusGrants(char, backgrounds, items) {
+  const grants = [];
+  const bg = backgrounds.find(b => b.id === char.backgroundId);
+  if (bg && bg.bonusTrainingGrants) bg.bonusTrainingGrants.forEach(g => grants.push({ ...g, source: bg.name }));
+  (char.learnedBonusTrainings || []).forEach(tid => {
+    const item = items.find(it => it.bonusTrainingGrant && it.bonusTrainingGrant.trainingId === tid);
+    if (item) grants.push({ ...item.bonusTrainingGrant, source: item.name });
+  });
+  const byTraining = {};
+  grants.forEach(g => {
+    const cur = byTraining[g.trainingId] || { trainingId: g.trainingId, freeCasts: 0, manaCost: null, sources: [] };
+    cur.freeCasts += g.freeCasts || 0;
+    if (g.manaCost != null) cur.manaCost = cur.manaCost == null ? g.manaCost : Math.min(cur.manaCost, g.manaCost);
+    cur.sources.push(g.source);
+    byTraining[g.trainingId] = cur;
+  });
+  return Object.values(byTraining);
 }
 
 function trainingSlots(cls, level, hasSpec) {
@@ -170,6 +200,11 @@ function emptyCharacter() {
     hpCurrent: 0, manaCurrent: 0,
     gold: 0, inventory: [], customItems: [],
     charNotes: "", noteRows: [],
+    // Bonus spells/trainings learned permanently from items (e.g. Tome of
+    // Mana Bolt) — just the trainingId list; see collectBonusGrants for
+    // how these combine with Background grants. bonusTrainingUses tracks
+    // free casts spent this encounter, keyed by trainingId.
+    learnedBonusTrainings: [], bonusManaMax: 0, bonusTrainingUses: {},
   };
 }
 
@@ -244,12 +279,22 @@ function Section({ title, children }) {
   );
 }
 
+// Each core stat gets its own accent so the sheet's stat row reads at a
+// glance instead of as a wall of identical gray chips.
+const STAT_COLORS = {
+  Health: "#e0785a",
+  Armor: "#8fa6c9",
+  Speed: "#7bc47f",
+  Mana: "#b090e0",
+};
+
 function StatChip({ label, value }) {
   if (value === null || value === undefined) return null;
+  const color = STAT_COLORS[label] || ACCENT;
   return (
-    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "8px 4px", textAlign: "center" }}>
-      <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-      <div style={{ fontSize: 18, color: TEXT.name, fontWeight: 600 }}>{value}</div>
+    <div style={{ background: "#1c150f", border: `0.5px solid ${color}55`, borderRadius: 8, padding: "10px 6px", textAlign: "center" }}>
+      <div style={{ fontFamily: HEADFONT, fontSize: 13, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
+      <div style={{ fontFamily: HEADFONT, fontSize: 26, color: TEXT.name, fontWeight: 700, marginTop: 2 }}>{value}</div>
     </div>
   );
 }
@@ -259,10 +304,11 @@ function StatChip({ label, value }) {
 // play doesn't require leaving the stats row.
 function TrackedStatChip({ label, current, max, onAdjust, onReset }) {
   if (max === null || max === undefined) return null;
+  const color = STAT_COLORS[label] || ACCENT;
   return (
-    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "8px 4px", textAlign: "center" }}>
-      <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-      <div style={{ fontSize: 18, color: TEXT.name, fontWeight: 600, marginBottom: 4 }}>{current} / {max}</div>
+    <div style={{ background: "#1c150f", border: `0.5px solid ${color}55`, borderRadius: 8, padding: "10px 6px", textAlign: "center" }}>
+      <div style={{ fontFamily: HEADFONT, fontSize: 13, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
+      <div style={{ fontFamily: HEADFONT, fontSize: 26, color: TEXT.name, fontWeight: 700, marginTop: 2, marginBottom: 4 }}>{current} <span style={{ fontSize: 15, color: TEXT.faint }}>/ {max}</span></div>
       <div className="no-print" style={{ display: "flex", gap: 3, justifyContent: "center" }}>
         <button onClick={() => onAdjust(-1)} title={`−1 ${label}`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#e0785a", width: 22, height: 22, fontSize: 13, lineHeight: 1 }}>−</button>
         <button onClick={() => onAdjust(1)} title={`+1 ${label}`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#7bc47f", width: 22, height: 22, fontSize: 13, lineHeight: 1 }}>+</button>
@@ -320,6 +366,7 @@ function App() {
   const [backgrounds, setBackgrounds] = useState([]);
   const [skillDefs, setSkillDefs] = useState([]);
   const [items, setItems] = useState([]);
+  const [bonusTrainings, setBonusTrainings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("build");
   const [itemSearch, setItemSearch] = useState("");
@@ -339,7 +386,8 @@ function App() {
       fetch("data/backgrounds.json").then(r => r.json()),
       fetch("data/skills.json").then(r => r.json()),
       fetch("data/items.json").then(r => r.json()),
-    ]).then(([c, b, s, it]) => { setClasses(c); setBackgrounds(b); setSkillDefs(s); setItems(it); setLoading(false); });
+      fetch("data/bonus-trainings.json").then(r => r.json()),
+    ]).then(([c, b, s, it, bt]) => { setClasses(c); setBackgrounds(b); setSkillDefs(s); setItems(it); setBonusTrainings(bt); setLoading(false); });
   }, []);
 
   // ── Persist the active character, and keep the switcher list synced ──
@@ -396,13 +444,14 @@ function App() {
 
   const cls = classes.find(c => c.id === char.classId) || null;
   const spec = cls ? cls.specializations.find(s => s.id === char.specId) : null;
-  const stats = computeStats(cls, spec, char.level, char.heroBlessing);
+  const stats = computeStats(cls, spec, char.level, char.heroBlessing, char.bonusManaMax);
   const skillBudget = skillPointBudget(char);
   const skillSpent = Object.values(char.skills).reduce((a, b) => a + b, 0);
+  const bonusGrants = collectBonusGrants(char, backgrounds, items);
 
   const chooseClass = id => {
     const next = classes.find(c => c.id === id);
-    const nextStats = computeStats(next, null, char.level, char.heroBlessing);
+    const nextStats = computeStats(next, null, char.level, char.heroBlessing, char.bonusManaMax);
     set({
       classId: id, specId: "", knownTrainings: [],
       hpCurrent: nextStats.health, manaCurrent: nextStats.mana || 0,
@@ -496,6 +545,21 @@ function App() {
   const updateCustomItem = (id, patch) => set({ customItems: char.customItems.map(c => c.id === id ? { ...c, ...patch } : c) });
   const removeCustomItem = id => set({ customItems: char.customItems.filter(c => c.id !== id) });
 
+  // Consumes one copy of an item that permanently teaches a bonus
+  // training (e.g. Tome of Mana Bolt) — removes it from inventory, adds
+  // the training to the learned list (deduped), and applies any
+  // permanent Mana bonus it carries.
+  const learnFromItem = item => {
+    if (!item.bonusTrainingGrant || (invMap[item.name] || 0) <= 0) return;
+    adjustInventory(item.name, -1);
+    set({
+      learnedBonusTrainings: char.learnedBonusTrainings.includes(item.bonusTrainingGrant.trainingId)
+        ? char.learnedBonusTrainings
+        : [...char.learnedBonusTrainings, item.bonusTrainingGrant.trainingId],
+      bonusManaMax: char.bonusManaMax + (item.manaBonus || 0),
+    });
+  };
+
   // ── Notes tab helpers ──
   const addNoteRow = () => set({ noteRows: [...char.noteRows, { id: makeUid(), text: "" }] });
   const updateNoteRow = (id, text) => set({ noteRows: char.noteRows.map(r => r.id === id ? { ...r, text } : r) });
@@ -506,6 +570,15 @@ function App() {
   const applyMana = delta => set({ manaCurrent: Math.max(0, Math.min(stats.mana || 0, char.manaCurrent + delta)) });
   const resetHp = () => set({ hpCurrent: stats.health });
   const resetMana = () => set({ manaCurrent: stats.mana || 0 });
+
+  // Free casts used this encounter for a bonus training — clamped to how
+  // many free casts are actually granted; a Reset puts it back to 0 (end
+  // of encounter / after a rest).
+  const adjustBonusUse = (trainingId, freeCasts, delta) => {
+    const next = Math.max(0, Math.min(freeCasts, (char.bonusTrainingUses[trainingId] || 0) + delta));
+    set({ bonusTrainingUses: { ...char.bonusTrainingUses, [trainingId]: next } });
+  };
+  const resetBonusUse = trainingId => set({ bonusTrainingUses: { ...char.bonusTrainingUses, [trainingId]: 0 } });
 
   // ── Export / Import / Share ──
   const doExport = () => {
@@ -530,6 +603,7 @@ function App() {
       charName: char.charName, backgroundId: char.backgroundId, backgroundSkillChoices: char.backgroundSkillChoices, skills: char.skills,
       classId: char.classId, specId: char.specId, level: char.level,
       knownTrainings: char.knownTrainings, heroBlessing: char.heroBlessing,
+      learnedBonusTrainings: char.learnedBonusTrainings, bonusManaMax: char.bonusManaMax,
     });
     const url = window.location.href.split("#")[0] + "#char=" + encoded;
     const legacyCopy = () => {
@@ -661,6 +735,17 @@ function App() {
                   {background.features.map((f, i) => (
                     <p key={i}><strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}</p>
                   ))}
+                  {(background.bonusTrainingGrants || []).map((g, i) => {
+                    const t = bonusTrainings.find(bt => bt.id === g.trainingId);
+                    if (!t) return null;
+                    return (
+                      <p key={i}>
+                        <strong style={{ color: TEXT.name }}>{t.name}</strong>: {t.text}
+                        {" "}{g.freeCasts > 0 ? `Free to use ${g.freeCasts}× per encounter` : ""}
+                        {g.manaCost != null ? `${g.freeCasts > 0 ? ", after that" : "Can be cast"} for ${g.manaCost} Mana.` : "."}
+                      </p>
+                    );
+                  })}
                 </div>
               )}
               {background && background.skillChoices.length > 0 && (
@@ -839,9 +924,21 @@ function App() {
                             <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
                             <span style={{ color: TEXT.body }}>: {it.text}</span>
                           </div>
-                          <button onClick={() => addToInventory(it.name)} style={{ flexShrink: 0, background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}>
-                            + Add{invMap[it.name] ? ` (${invMap[it.name]})` : ""}
-                          </button>
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            <button onClick={() => addToInventory(it.name)} style={{ background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}>
+                              + Add{invMap[it.name] ? ` (${invMap[it.name]})` : ""}
+                            </button>
+                            {it.bonusTrainingGrant && (
+                              <button
+                                onClick={() => learnFromItem(it)}
+                                disabled={(invMap[it.name] || 0) <= 0 || char.learnedBonusTrainings.includes(it.bonusTrainingGrant.trainingId)}
+                                title={(invMap[it.name] || 0) <= 0 ? "Add it to inventory first" : "Consume 1 to permanently learn this"}
+                                style={{ background: "transparent", border: `0.5px solid ${BOOKLINK}`, color: BOOKLINK, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}
+                              >
+                                {char.learnedBonusTrainings.includes(it.bonusTrainingGrant.trainingId) ? "Learned" : "Learn"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -911,6 +1008,35 @@ function App() {
                     <strong style={{ color: TEXT.name }}>{t.name}</strong>: {t.text}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Bonus spells/trainings — granted by Background, learned
+                from items, etc.; not tied to any one class. */}
+            {bonusGrants.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Bonus Spells & Trainings</div>
+                {bonusGrants.map(g => {
+                  const t = bonusTrainings.find(bt => bt.id === g.trainingId);
+                  if (!t) return null;
+                  const used = char.bonusTrainingUses[g.trainingId] || 0;
+                  return (
+                    <div key={g.trainingId} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 6 }}>
+                      <strong style={{ color: TEXT.name }}>{t.name}</strong>
+                      <span style={{ color: TEXT.faint, fontSize: 11 }}> ({g.sources.join(", ")})</span>: {t.text}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                        {g.freeCasts > 0 && (
+                          <span className="no-print" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 11, color: TEXT.faint }}>Free casts: {used} / {g.freeCasts}</span>
+                            <button onClick={() => adjustBonusUse(g.trainingId, g.freeCasts, 1)} disabled={used >= g.freeCasts} title="Spend a free cast" style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#e0785a", padding: "1px 8px", fontSize: 11, lineHeight: 1.6 }}>Use</button>
+                            <button onClick={() => resetBonusUse(g.trainingId)} title="Reset (new encounter)" style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: TEXT.muted, width: 20, height: 20, fontSize: 10, lineHeight: 1 }}>↺</button>
+                          </span>
+                        )}
+                        {g.manaCost != null && <span style={{ fontSize: 11, color: TEXT.faint }}>{g.freeCasts > 0 ? "After that, " : ""}costs {g.manaCost} Mana</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
