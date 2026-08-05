@@ -414,6 +414,11 @@ function App() {
   const available = trainingPool.filter(t => t.levelReq <= char.level);
   const slots = cls ? trainingSlots(cls, char.level, !!char.specId) : 0;
   const known = char.knownTrainings.filter(n => available.some(t => t.name === n));
+  // Chosen trainings/spells float to the top of the Builder checklist as
+  // soon as they're picked, so the list doesn't need scrolling to see
+  // what you've already taken. Array.sort is stable, so ties (both known
+  // or both unknown) keep their original relative order.
+  const availableSorted = [...available].sort((a, b) => (known.includes(b.name) ? 1 : 0) - (known.includes(a.name) ? 1 : 0));
 
   const toggleTraining = name => {
     const isKnown = char.knownTrainings.includes(name);
@@ -421,12 +426,18 @@ function App() {
     else if (known.length < slots) set({ knownTrainings: [...char.knownTrainings, name] });
   };
 
-  // Builder shows every active feature, stat-only ones included.
+  // Builder shows every active feature. Base-class "level up" entries
+  // (extra trainings/spells known, skill points, Hero's Blessing, plain
+  // stat bumps) are all flagged statOnly for now — they're bookkeeping
+  // already reflected elsewhere (the trainings list, the skill pips, the
+  // stat row), not standalone features. Only full specialization
+  // abilities are real "features" until the class-by-class pass that
+  // tells the genuine new abilities apart from ability-count increases.
   const activeFeaturesAll = [];
   if (cls) {
     activeFeaturesAll.push({ name: cls.resourceAbility.name, text: cls.resourceAbility.text, statOnly: false });
     cls.levels.filter(l => l.level <= char.level && l.level !== 2 && l.level !== 10).forEach(l =>
-      l.text.forEach(t => activeFeaturesAll.push({ name: `Level ${l.level}`, text: t, statOnly: STAT_ONLY_LINE.test(t) }))
+      l.text.forEach(t => activeFeaturesAll.push({ name: `Level ${l.level}`, text: t, statOnly: true }))
     );
   }
   if (spec) {
@@ -434,8 +445,8 @@ function App() {
       l.abilities.forEach(a => activeFeaturesAll.push({ name: a.name, text: a.text, statOnly: STAT_ONLY_NAMES.has(a.name) }))
     );
   }
-  // Sheet hides the stat-only ones — they're already reflected in the
-  // stat row above, so listing them again would just be noise.
+  // Sheet hides the stat-only/bookkeeping ones — only the class's core
+  // resource ability and full specialization features show up there.
   const classFeaturesForSheet = activeFeaturesAll.filter(f => !f.statOnly);
 
   const background = backgrounds.find(b => b.id === char.backgroundId) || null;
@@ -683,11 +694,11 @@ function App() {
                       {cls.trainingsLabel} known: {known.length} / {slots}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto", paddingRight: 4 }}>
-                      {available.map((t, i) => {
+                      {availableSorted.map(t => {
                         const isKnown = char.knownTrainings.includes(t.name);
                         const disabled = !isKnown && known.length >= slots;
                         return (
-                          <label key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: disabled ? TEXT.faint : TEXT.body, alignItems: "flex-start" }}>
+                          <label key={t.name} style={{ display: "flex", gap: 8, fontSize: 13, color: disabled ? TEXT.faint : TEXT.body, alignItems: "flex-start" }}>
                             <input type="checkbox" checked={isKnown} disabled={disabled} onChange={() => toggleTraining(t.name)} style={{ marginTop: 3, width: "auto" }} />
                             <span><strong style={{ color: TEXT.name }}>{t.name}</strong> <span style={{ color: TEXT.faint, fontSize: 11 }}>({t.source})</span>: {t.text}</span>
                           </label>
