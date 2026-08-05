@@ -122,15 +122,17 @@ function trainingSlots(cls, level, hasSpec) {
   return n;
 }
 
-// A character starts with 1 skill point from character creation, gets 1
-// more for choosing a Background, and 1 more at each class "Adventurer's
-// Knowledge" milestone (levels 4 and 7); the level-10 Hero's Blessing can
-// grant one further point if chosen. This is the cap the pip selectors
-// enforce below.
-function skillPointBudget(char, cls) {
+// A character starts with 1 free-spend skill point from character
+// creation, plus 1 more at each class "Adventurer's Knowledge" milestone
+// (levels 4 and 7); the level-10 Hero's Blessing can grant one further
+// point if chosen. This is the cap the pip selectors enforce below.
+// A Background's bonus point is NOT part of this pool — it's locked to
+// whichever skill(s) the Background's own skillChoices restrict it to,
+// tracked separately in char.backgroundSkillChoices (see bgBonusMap).
+function skillPointBudget(char) {
   let budget = 1;
-  if (char.backgroundId) budget += 1;
-  if (cls) cls.levels.forEach(l => { if (char.level >= l.level && (l.level === 4 || l.level === 7)) budget += 1; });
+  if (char.level >= 4) budget += 1;
+  if (char.level >= 7) budget += 1;
   if (char.level >= 10 && char.heroBlessing === "skill") budget += 1;
   return budget;
 }
@@ -161,7 +163,7 @@ function decChar(str) { try { return JSON.parse(atob(str)); } catch { return nul
 function emptyCharacter() {
   return {
     charName: "", charConcept: "",
-    backgroundId: "",
+    backgroundId: "", backgroundSkillChoices: [],
     skills: { Athletics: 0, Sneak: 0, Notice: 0, Convince: 0, Expertise: 0 },
     classId: "", specId: "", level: 1,
     knownTrainings: [], heroBlessing: "",
@@ -395,7 +397,7 @@ function App() {
   const cls = classes.find(c => c.id === char.classId) || null;
   const spec = cls ? cls.specializations.find(s => s.id === char.specId) : null;
   const stats = computeStats(cls, spec, char.level, char.heroBlessing);
-  const skillBudget = skillPointBudget(char, cls);
+  const skillBudget = skillPointBudget(char);
   const skillSpent = Object.values(char.skills).reduce((a, b) => a + b, 0);
 
   const chooseClass = id => {
@@ -451,6 +453,30 @@ function App() {
 
   const background = backgrounds.find(b => b.id === char.backgroundId) || null;
 
+  // Switching Background resets its skill-choice slots — a previous
+  // Background's picks don't carry over if the new one doesn't offer the
+  // same options.
+  const chooseBackground = id => {
+    const next = backgrounds.find(b => b.id === id);
+    set({
+      backgroundId: id,
+      backgroundSkillChoices: next ? next.skillChoices.map(() => "") : [],
+    });
+  };
+  const setBackgroundSkillChoice = (index, skillName) => {
+    const next = [...char.backgroundSkillChoices];
+    next[index] = skillName;
+    set({ backgroundSkillChoices: next });
+  };
+
+  // A Background's bonus point(s) are locked to specific skills (see
+  // backgrounds.json's skillChoices) rather than being free-spend like
+  // the general pool — bgBonusMap tallies how many of those landed on
+  // each skill, and finalSkillValue is what's actually shown/used.
+  const bgBonusMap = {};
+  (char.backgroundSkillChoices || []).forEach(s => { if (s) bgBonusMap[s] = (bgBonusMap[s] || 0) + 1; });
+  const finalSkillValue = name => (char.skills[name] || 0) + (bgBonusMap[name] || 0);
+
   // ── Items tab helpers ──
   const itemsByCategory = items.reduce((acc, it) => { (acc[it.category] = acc[it.category] || []).push(it); return acc; }, {});
   const invMap = char.inventory.reduce((acc, e) => { acc[e.name] = e.qty; return acc; }, {});
@@ -501,7 +527,7 @@ function App() {
   };
   const doShare = () => {
     const encoded = encChar({
-      charName: char.charName, backgroundId: char.backgroundId, skills: char.skills,
+      charName: char.charName, backgroundId: char.backgroundId, backgroundSkillChoices: char.backgroundSkillChoices, skills: char.skills,
       classId: char.classId, specId: char.specId, level: char.level,
       knownTrainings: char.knownTrainings, heroBlessing: char.heroBlessing,
     });
@@ -623,7 +649,7 @@ function App() {
 
             <Section title="Background">
               <Field label="Choose a Background">
-                <select value={char.backgroundId} onChange={e => set({ backgroundId: e.target.value })}>
+                <select value={char.backgroundId} onChange={e => chooseBackground(e.target.value)}>
                   <option value="">— none —</option>
                   {backgrounds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
@@ -637,22 +663,43 @@ function App() {
                   ))}
                 </div>
               )}
+              {background && background.skillChoices.length > 0 && (
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {background.skillChoices.map((choice, i) => (
+                    <Field key={i} label={`Background skill point${background.skillChoices.length > 1 ? ` ${i + 1}` : ""} — choose ${choice.options.join(" or ")}`}>
+                      <select value={char.backgroundSkillChoices[i] || ""} onChange={e => setBackgroundSkillChoice(i, e.target.value)}>
+                        <option value="">— choose —</option>
+                        {choice.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </Field>
+                  ))}
+                </div>
+              )}
             </Section>
 
             <Section title="Skills">
               <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 10 }}>
-                Skill points: <strong style={{ color: skillSpent >= skillBudget ? ACCENT : TEXT.name }}>{skillSpent} / {skillBudget}</strong>
-                <span style={{ marginLeft: 6, fontSize: 11 }}>(1 from character creation{char.backgroundId ? ", +1 from Background" : ""}{cls && char.level >= 4 ? ", +1 at level 4" : ""}{cls && char.level >= 7 ? ", +1 at level 7" : ""}{char.level >= 10 && char.heroBlessing === "skill" ? ", +1 from Hero's Blessing" : ""})</span>
+                Free skill points: <strong style={{ color: skillSpent >= skillBudget ? ACCENT : TEXT.name }}>{skillSpent} / {skillBudget}</strong>
+                <span style={{ marginLeft: 6, fontSize: 11 }}>(1 from character creation{char.level >= 4 ? ", +1 at level 4" : ""}{char.level >= 7 ? ", +1 at level 7" : ""}{char.level >= 10 && char.heroBlessing === "skill" ? ", +1 from Hero's Blessing" : ""})</span>
               </div>
+              {background && background.skillChoices.length > 0 && (
+                <div style={{ fontSize: 11, color: TEXT.faint, marginBottom: 10 }}>
+                  Your Background's skill point(s) are chosen above and locked to those options — they don't come out of this pool.
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {skillDefs.map(s => (
                   <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                     <span style={{ fontSize: 14, color: TEXT.body }}>{s.name}</span>
-                    <SkillPipsEditable
-                      value={char.skills[s.name] || 0}
-                      disabled={skillSpent >= skillBudget}
-                      onChange={n => set({ skills: { ...char.skills, [s.name]: Math.max(0, n) } })}
-                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <SkillPipsEditable
+                        value={char.skills[s.name] || 0}
+                        disabled={skillSpent >= skillBudget}
+                        onChange={n => set({ skills: { ...char.skills, [s.name]: Math.max(0, n) } })}
+                      />
+                      {bgBonusMap[s.name] > 0 && <span style={{ fontSize: 11, color: ACCENT }}>+{bgBonusMap[s.name]} bg</span>}
+                      <span style={{ fontSize: 12, color: TEXT.faint, minWidth: 46, textAlign: "right" }}>Total {finalSkillValue(s.name)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -837,7 +884,7 @@ function App() {
                 {skillDefs.map(s => (
                   <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: TEXT.body }}>
                     <span>{s.name}</span>
-                    <SkillPipsReadOnly value={char.skills[s.name] || 0} />
+                    <SkillPipsReadOnly value={finalSkillValue(s.name)} />
                   </div>
                 ))}
               </div>
