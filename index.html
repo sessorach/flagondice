@@ -167,7 +167,7 @@ function collectBonusGrants(char, backgrounds, items) {
     const cur = byTraining[g.trainingId] || { trainingId: g.trainingId, freeCasts: 0, manaCost: null, sources: [] };
     if (g.type === "freeCasts") cur.freeCasts += g.amount || 0;
     if (g.type === "training" && g.manaCost != null) cur.manaCost = cur.manaCost == null ? g.manaCost : Math.min(cur.manaCost, g.manaCost);
-    cur.sources.push(g.source);
+    if (!cur.sources.includes(g.source)) cur.sources.push(g.source);
     byTraining[g.trainingId] = cur;
   });
   return Object.values(byTraining);
@@ -255,8 +255,10 @@ function emptyCharacter() {
     // in items.json via gatherAllGrants, not duplicated here — so
     // unlearning (removing an entry) always reverses exactly what that
     // item currently grants. bonusTrainingUses tracks free casts spent
-    // this encounter, keyed by trainingId.
-    learnedItems: [], bonusTrainingUses: {},
+    // this encounter, keyed by trainingId; charmUses tracks which carried
+    // Charms have been used this fight, keyed by item name. Both clear on
+    // "Refresh resources."
+    learnedItems: [], bonusTrainingUses: {}, charmUses: {},
   };
 }
 
@@ -352,9 +354,10 @@ function StatChip({ label, value }) {
 }
 
 // A stat chip for a trackable resource (Health/Mana) — shows current/max
-// plus inline −/+/reset buttons on the same line, so adjusting it during
-// play doesn't require leaving the stats row.
-function TrackedStatChip({ label, current, max, onAdjust, onReset }) {
+// plus inline −/+ buttons on the same line, so adjusting it during play
+// doesn't require leaving the stats row. Resetting to max is handled by
+// the sheet's single "Refresh resources" button, not a per-chip control.
+function TrackedStatChip({ label, current, max, onAdjust }) {
   if (max === null || max === undefined) return null;
   const color = STAT_COLORS[label] || ACCENT;
   return (
@@ -364,8 +367,25 @@ function TrackedStatChip({ label, current, max, onAdjust, onReset }) {
       <div className="no-print" style={{ display: "flex", gap: 4, justifyContent: "center" }}>
         <button onClick={() => onAdjust(-1)} title={`−1 ${label}`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#e0785a", width: 32, height: 32, fontSize: 17, lineHeight: 1 }}>−</button>
         <button onClick={() => onAdjust(1)} title={`+1 ${label}`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#7bc47f", width: 32, height: 32, fontSize: 17, lineHeight: 1 }}>+</button>
-        <button onClick={onReset} title={`Reset ${label} to max`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: TEXT.muted, width: 32, height: 32, fontSize: 15, lineHeight: 1 }}>↺</button>
       </div>
+    </div>
+  );
+}
+
+// Level stepper — a centered number with big −/+ buttons on either side,
+// replacing the native number input's tiny built-in spinner arrows.
+function LevelStepper({ value, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button
+        type="button" onClick={() => onChange(Math.max(1, value - 1))} disabled={value <= 1}
+        style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", width: 36, height: 36, fontSize: 19, lineHeight: 1, flexShrink: 0 }}
+      >−</button>
+      <div style={{ fontFamily: HEADFONT, fontSize: 22, fontWeight: 700, color: TEXT.name, minWidth: 28, textAlign: "center" }}>{value}</div>
+      <button
+        type="button" onClick={() => onChange(Math.min(10, value + 1))} disabled={value >= 10}
+        style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#7bc47f", width: 36, height: 36, fontSize: 19, lineHeight: 1, flexShrink: 0 }}
+      >+</button>
     </div>
   );
 }
@@ -507,6 +527,12 @@ function App() {
   const skillBudget = skillPointBudget(char);
   const skillSpent = Object.values(char.skills).reduce((a, b) => a + b, 0);
   const bonusGrants = collectBonusGrants(char, backgrounds, items);
+  // Bonus trainings tagged with an `attack` (e.g. Mana Bolt) join the
+  // class's own attacks list on the sheet — any granted training with
+  // attack stats counts, regardless of which source granted it.
+  const bonusAttacks = bonusGrants
+    .map(g => bonusTrainings.find(bt => bt.id === g.trainingId))
+    .filter(t => t && t.attack);
 
   const chooseClass = id => {
     const next = classes.find(c => c.id === id);
@@ -655,17 +681,38 @@ function App() {
   // ── HP / Mana quick adjust ──
   const applyHp = delta => set({ hpCurrent: Math.max(0, Math.min(stats.health, char.hpCurrent + delta)) });
   const applyMana = delta => set({ manaCurrent: Math.max(0, Math.min(stats.mana || 0, char.manaCurrent + delta)) });
-  const resetHp = () => set({ hpCurrent: stats.health });
-  const resetMana = () => set({ manaCurrent: stats.mana || 0 });
 
   // Free casts used this encounter for a bonus training — clamped to how
-  // many free casts are actually granted; a Reset puts it back to 0 (end
-  // of encounter / after a rest).
+  // many free casts are actually granted.
   const adjustBonusUse = (trainingId, freeCasts, delta) => {
     const next = Math.max(0, Math.min(freeCasts, (char.bonusTrainingUses[trainingId] || 0) + delta));
     set({ bonusTrainingUses: { ...char.bonusTrainingUses, [trainingId]: next } });
   };
-  const resetBonusUse = trainingId => set({ bonusTrainingUses: { ...char.bonusTrainingUses, [trainingId]: 0 } });
+
+  // Which bucket an item's category falls into for the sheet's inventory
+  // controls: Consumables (and Permanent Consumes, same as the Items
+  // tab's grouping) get removed on use; Charms are reusable but limited
+  // to once per fight; Equipment just lists its text, no button.
+  const itemUseKind = item => {
+    if (!item) return null;
+    if (item.category === "Consumables" || item.category === "Permanent Consumes") return "consumable";
+    if (item.category === "Charms") return "charm";
+    return null;
+  };
+  const useConsumable = name => adjustInventory(name, -1);
+  const toggleCharmUse = name => set({ charmUses: { ...char.charmUses, [name]: !char.charmUses[name] } });
+
+  // Health, Mana, per-encounter bonus-training free casts, and Charm uses
+  // all reset together at the end of a fight — one button instead of a
+  // reset control scattered across each of them.
+  const refreshResources = () => {
+    set({
+      hpCurrent: stats.health,
+      manaCurrent: stats.mana || 0,
+      bonusTrainingUses: {},
+      charmUses: {},
+    });
+  };
 
   // ── Export / Import / Share ──
   const doExport = () => {
@@ -753,7 +800,7 @@ function App() {
       }}>
         <div className="site-header-brand" style={{ textAlign: "center" }}>
           <div style={{ fontFamily: HEADFONT, fontSize: 24, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
-          <div style={{ fontSize: 14, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
+          <div style={{ fontSize: 14, color: TEXT.faint, marginTop: 1 }}>A streamlined, d6-based TTRPG for the modern gamer</div>
         </div>
 
         {/* Character switcher */}
@@ -801,7 +848,7 @@ function App() {
                     <input type="text" value={char.charName} onChange={e => set({ charName: e.target.value })} />
                   </Field>
                   <Field label="Level">
-                    <input type="number" min="1" max="10" value={char.level} onChange={e => set({ level: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
+                    <LevelStepper value={char.level} onChange={n => set({ level: n })} />
                   </Field>
                 </div>
                 <Field label="Concept / backstory">
@@ -1146,9 +1193,27 @@ function App() {
               </div>
               <button className="no-print" onClick={() => window.print()} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 15 }}>Print</button>
             </div>
+
+            {/* Health, Mana, per-encounter bonus-training free casts, and
+                Charm uses all reset together at the end of a fight — one
+                button instead of a reset control on each of them. */}
+            <button
+              className="no-print"
+              onClick={refreshResources}
+              title="Reset Health, Mana, bonus-spell free casts, and Charms for a new fight"
+              style={{
+                display: "block", width: "100%", marginTop: 14,
+                background: `${ACCENT}1a`, border: `1px solid ${ACCENT}`, borderRadius: 8,
+                color: ACCENT, padding: "10px 16px", fontSize: 16, fontWeight: 700,
+                fontFamily: HEADFONT, letterSpacing: "0.03em",
+              }}
+            >
+              ↻ Refresh resources (new fight)
+            </button>
+
             {/* Identity (name/meta/concept) paired with the Skills summary
                 so Skills isn't a sparse full-width row by itself. */}
-            <div className="pair-grid" style={{ marginTop: 10 }}>
+            <div className="pair-grid" style={{ marginTop: 14 }}>
               <div>
                 {char.charConcept && <div style={{ fontSize: 15, color: TEXT.body, lineHeight: 1.6 }}>{char.charConcept}</div>}
               </div>
@@ -1169,17 +1234,21 @@ function App() {
             <div className="field-grid-4" style={{ margin: "16px 0" }}>
               <StatChip label="Armor" value={stats.armor} />
               <StatChip label="Speed" value={stats.speed} />
-              <TrackedStatChip label="Health" current={char.hpCurrent} max={stats.health} onAdjust={applyHp} onReset={resetHp} />
-              {stats.mana !== null && <TrackedStatChip label="Mana" current={char.manaCurrent} max={stats.mana} onAdjust={applyMana} onReset={resetMana} />}
+              <TrackedStatChip label="Health" current={char.hpCurrent} max={stats.health} onAdjust={applyHp} />
+              {stats.mana !== null && <TrackedStatChip label="Mana" current={char.manaCurrent} max={stats.mana} onAdjust={applyMana} />}
             </div>
 
 
-            {/* Attacks */}
-            {cls && cls.attacks.length > 0 && (
+            {/* Attacks — class attacks plus any granted bonus training
+                that's tagged as an attack (e.g. Mana Bolt) */}
+            {((cls && cls.attacks.length > 0) || bonusAttacks.length > 0) && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Attacks</div>
-                {cls.attacks.map((a, i) => (
-                  <div key={i} style={{ fontSize: 15, color: TEXT.body }}>{a.name}: {a.toHit} to hit, {a.damage} dmg, Range {a.range}</div>
+                {cls && cls.attacks.map((a, i) => (
+                  <div key={"cls" + i} style={{ fontSize: 15, color: TEXT.body }}>{a.name}: {a.toHit} to hit, {a.damage} dmg, Range {a.range}</div>
+                ))}
+                {bonusAttacks.map((t, i) => (
+                  <div key={"bonus" + i} style={{ fontSize: 15, color: TEXT.body }}>{t.name}: {t.attack.toHit} to hit, {t.attack.damage} dmg, Range {t.attack.range}</div>
                 ))}
               </div>
             )}
@@ -1216,7 +1285,6 @@ function App() {
                           <span className="no-print" style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{ fontSize: 13, color: TEXT.faint }}>Free casts: {used} / {g.freeCasts}</span>
                             <button onClick={() => adjustBonusUse(g.trainingId, g.freeCasts, 1)} disabled={used >= g.freeCasts} title="Spend a free cast" style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#e0785a", padding: "6px 10px", fontSize: 13, lineHeight: 1.6 }}>Use</button>
-                            <button onClick={() => resetBonusUse(g.trainingId)} title="Reset (new encounter)" style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: TEXT.muted, width: 30, height: 30, fontSize: 15, lineHeight: 1 }}>↺</button>
                           </span>
                         )}
                         {g.manaCost != null && <span style={{ fontSize: 13, color: TEXT.faint }}>{g.freeCasts > 0 ? "After that, " : ""}costs {g.manaCost} Mana</span>}
@@ -1262,12 +1330,36 @@ function App() {
             {(char.inventory.length > 0 || char.customItems.length > 0) && (
               <div>
                 <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Inventory</div>
-                {char.inventory.map((e, i) => (
-                  <div key={i} style={{ fontSize: 14, color: TEXT.body }}>{e.name} {e.qty > 1 ? `×${e.qty}` : ""}</div>
-                ))}
-                {char.customItems.filter(c => c.name).map(c => (
-                  <div key={c.id} style={{ fontSize: 14, color: TEXT.body }}>{c.name} {c.qty > 1 ? `×${c.qty}` : ""} <span style={{ color: TEXT.faint }}>— {c.text}</span></div>
-                ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {char.inventory.map((e, i) => {
+                    const item = items.find(it => it.name === e.name);
+                    const kind = itemUseKind(item);
+                    const used = !!char.charmUses[e.name];
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, fontSize: 14, lineHeight: 1.5 }}>
+                        <div style={{ color: TEXT.body, opacity: kind === "charm" && used ? 0.55 : 1 }}>
+                          <strong style={{ color: TEXT.name }}>{e.name}</strong>{e.qty > 1 ? ` ×${e.qty}` : ""}
+                          {item && <span style={{ color: TEXT.faint }}>: {item.text}</span>}
+                        </div>
+                        {kind === "consumable" && (
+                          <button className="no-print" onClick={() => useConsumable(e.name)} title="Use one — removes it from Inventory" style={{ flexShrink: 0, background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "3px 10px", fontSize: 13 }}>Use</button>
+                        )}
+                        {kind === "charm" && (
+                          <button className="no-print" onClick={() => toggleCharmUse(e.name)} title={used ? "Click to mark unused again" : "Use — once per fight"} style={{ flexShrink: 0, background: used ? "transparent" : `${ACCENT}1a`, border: `0.5px solid ${used ? BORDER : ACCENT}`, borderRadius: 6, color: used ? TEXT.muted : ACCENT, padding: "3px 10px", fontSize: 13 }}>{used ? "Used" : "Use"}</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {char.customItems.filter(c => c.name && c.qty > 0).map(c => (
+                    <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, fontSize: 14, lineHeight: 1.5 }}>
+                      <div style={{ color: TEXT.body }}>
+                        <strong style={{ color: TEXT.name }}>{c.name}</strong>{c.qty > 1 ? ` ×${c.qty}` : ""}
+                        {c.text && <span style={{ color: TEXT.faint }}>: {c.text}</span>}
+                      </div>
+                      <button className="no-print" onClick={() => updateCustomItem(c.id, { qty: Math.max(0, c.qty - 1) })} title="Use one — removes it once its quantity hits 0" style={{ flexShrink: 0, background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "3px 10px", fontSize: 13 }}>Use</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

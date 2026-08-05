@@ -2,6 +2,7 @@
   {
     "id": "mana-bolt",
     "name": "Mana Bolt",
-    "text": "As a Main Action, you can make an attack with a Range of 3, 2d6 to hit, dealing 2d6 damage on a hit."
+    "text": "As a Main Action, you can make an attack with a Range of 3, 2d6 to hit, dealing 2d6 damage on a hit.",
+    "attack": { "toHit": "2d6", "damage": "2d6", "range": 3 }
   }
 ]
