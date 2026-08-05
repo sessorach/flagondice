@@ -75,12 +75,15 @@ const TEXT = { name: "#e8d9c4", body: "#cdb99e", label: "#c9752f", muted: "#a390
 const PANEL = "#221a13";
 const BORDER = "#3a2f24";
 const HEADFONT = "'Cinzel', Georgia, serif";
-const STORAGE_KEY = "flagondice-character";
+const MAX_SKILL_PIPS = 5;
 
-// ── Stat math — level-ups and specializations apply automatically here;
-// current Health/Mana are tracked separately (see the Character Sheet
-// tab's damage/heal controls) so the computed max never gets clobbered
-// by hand-entered numbers.
+// Ability entries that exist purely to carry a numeric stat delta (see
+// classes.json statMods/hpDelta) — the sheet auto-applies these to the
+// stat row, so listing them again under Features would just be noise.
+// The Builder still shows everything, stat entries included.
+const STAT_ONLY_NAMES = new Set(["Health", "Armor", "Speed", "Mana", "Range", "Armor & Health", "Stats", "Armor, Health & Mana"]);
+const STAT_ONLY_LINE = /^Your (Health|Armor|Speed|Mana) (increases|is (increased|reduced))\b/i;
+
 function computeStats(cls, spec, level, heroBlessing) {
   if (!cls) return { health: 0, armor: 0, speed: 0, mana: null };
   let health = cls.stats.health, armor = cls.stats.armor, speed = cls.stats.speed, mana = cls.stats.mana;
@@ -119,6 +122,19 @@ function trainingSlots(cls, level, hasSpec) {
   return n;
 }
 
+// A character starts with 1 skill point from character creation, gets 1
+// more for choosing a Background, and 1 more at each class "Adventurer's
+// Knowledge" milestone (levels 4 and 7); the level-10 Hero's Blessing can
+// grant one further point if chosen. This is the cap the pip selectors
+// enforce below.
+function skillPointBudget(char, cls) {
+  let budget = 1;
+  if (char.backgroundId) budget += 1;
+  if (cls) cls.levels.forEach(l => { if (char.level >= l.level && (l.level === 4 || l.level === 7)) budget += 1; });
+  if (char.level >= 10 && char.heroBlessing === "skill") budget += 1;
+  return budget;
+}
+
 const HERO_BLESSINGS = [
   { id: "damage", label: "Attacks deal +1 die of damage" },
   { id: "skill", label: "Gain a point in a Skill of your choice" },
@@ -126,6 +142,21 @@ const HERO_BLESSINGS = [
   { id: "mana", label: "Mana increases by 3", manaOnly: true },
   { id: "speed", label: "Speed increases by 1" },
 ];
+
+function makeUid() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function encChar(payload) { return btoa(JSON.stringify(payload)); }
+function decChar(str) { try { return JSON.parse(atob(str)); } catch { return null; } }
+
+// ══════════════════════════════════════════════════════════════════
+// CHARACTER SLOTS — localStorage holds any number of characters, each
+// under its own `flagondice-char-<id>` key, plus a small registry
+// (`flagondice-characters`, an [{id, name}] list) so the switcher can
+// list them without loading every one, and `flagondice-active-character`
+// for which one is currently open.
+// ══════════════════════════════════════════════════════════════════
 
 function emptyCharacter() {
   return {
@@ -140,15 +171,58 @@ function emptyCharacter() {
   };
 }
 
-function loadCharacter() {
+function loadCharacterData(id) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyCharacter();
-    return { ...emptyCharacter(), ...JSON.parse(raw) };
+    const raw = JSON.parse(localStorage.getItem(`flagondice-char-${id}`) || "null");
+    return { ...emptyCharacter(), ...raw };
   } catch { return emptyCharacter(); }
 }
 
-function makeUid() { return Math.random().toString(36).slice(2, 10); }
+function saveCharacterData(id, data) {
+  localStorage.setItem(`flagondice-char-${id}`, JSON.stringify(data));
+}
+
+// One-time upgrade: the first version of this app kept a single character
+// directly under `flagondice-character`. If that's present and no slot
+// registry exists yet, fold it into a proper slot so nobody's build
+// disappears when this ships. The old key is left in place, unused but
+// harmless, rather than deleted — a migration bug then just fails to
+// migrate instead of destroying data.
+function migrateLegacyCharacter() {
+  const raw = localStorage.getItem("flagondice-character");
+  if (raw === null) return null;
+  let data;
+  try { data = { ...emptyCharacter(), ...JSON.parse(raw) }; } catch { return null; }
+  const id = makeUid();
+  saveCharacterData(id, data);
+  return { id, name: data.charName || "Unnamed adventurer" };
+}
+
+function loadActiveCharacterState() {
+  let characters = [];
+  try { characters = JSON.parse(localStorage.getItem("flagondice-characters")) || []; } catch {}
+  let activeId = localStorage.getItem("flagondice-active-character");
+
+  if (characters.length === 0) {
+    const migrated = migrateLegacyCharacter();
+    if (migrated) {
+      characters = [migrated];
+      activeId = migrated.id;
+    } else {
+      const id = makeUid();
+      saveCharacterData(id, emptyCharacter());
+      characters = [{ id, name: "" }];
+      activeId = id;
+    }
+    localStorage.setItem("flagondice-characters", JSON.stringify(characters));
+    localStorage.setItem("flagondice-active-character", activeId);
+  }
+  if (!activeId || !characters.some(c => c.id === activeId)) {
+    activeId = characters[0].id;
+    localStorage.setItem("flagondice-active-character", activeId);
+  }
+  return { activeId, characters, data: loadCharacterData(activeId) };
+}
 
 function Field({ label, children }) {
   return (
@@ -178,19 +252,84 @@ function StatChip({ label, value }) {
   );
 }
 
+// A stat chip for a trackable resource (Health/Mana) — shows current/max
+// plus inline −/+/reset buttons on the same line, so adjusting it during
+// play doesn't require leaving the stats row.
+function TrackedStatChip({ label, current, max, onAdjust, onReset }) {
+  if (max === null || max === undefined) return null;
+  return (
+    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "8px 4px", textAlign: "center" }}>
+      <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 18, color: TEXT.name, fontWeight: 600, marginBottom: 4 }}>{current} / {max}</div>
+      <div className="no-print" style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+        <button onClick={() => onAdjust(-1)} title={`−1 ${label}`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#e0785a", width: 22, height: 22, fontSize: 13, lineHeight: 1 }}>−</button>
+        <button onClick={() => onAdjust(1)} title={`+1 ${label}`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#7bc47f", width: 22, height: 22, fontSize: 13, lineHeight: 1 }}>+</button>
+        <button onClick={onReset} title={`Reset ${label} to max`} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: TEXT.muted, width: 22, height: 22, fontSize: 11, lineHeight: 1 }}>↺</button>
+      </div>
+    </div>
+  );
+}
+
+// Read-only pip row — used on the Character sheet's skill summary.
+function SkillPipsReadOnly({ value }) {
+  return (
+    <span style={{ letterSpacing: 2 }}>
+      {Array.from({ length: MAX_SKILL_PIPS }, (_, i) => (
+        <span key={i} style={{ color: i < value ? ACCENT : BORDER, fontSize: 15 }}>{i < value ? "●" : "○"}</span>
+      ))}
+      {value > MAX_SKILL_PIPS && <span style={{ color: TEXT.faint, fontSize: 11 }}> +{value - MAX_SKILL_PIPS}</span>}
+    </span>
+  );
+}
+
+// Clickable pip row for the Builder — click a pip to set the skill to
+// that many points (clicking the currently-topmost filled pip again
+// clears it back down by one). Increases are blocked once the total
+// spent across all skills hits the character's skill point budget.
+function SkillPipsEditable({ value, onChange, disabled }) {
+  return (
+    <span style={{ letterSpacing: 2 }}>
+      {Array.from({ length: MAX_SKILL_PIPS }, (_, i) => {
+        const n = i + 1;
+        const filled = n <= value;
+        const wouldDisable = !filled && disabled;
+        return (
+          <button
+            key={i}
+            onClick={() => onChange(value === n ? n - 1 : n)}
+            disabled={wouldDisable}
+            title={`${n} point${n > 1 ? "s" : ""}`}
+            style={{
+              background: "transparent", border: "none", padding: 0, marginRight: 2,
+              color: filled ? ACCENT : (wouldDisable ? "#2a221a" : BORDER),
+              fontSize: 17, lineHeight: 1, cursor: wouldDisable ? "not-allowed" : "pointer",
+            }}
+          >
+            {filled ? "●" : "○"}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
 function App() {
   const [classes, setClasses] = useState([]);
   const [backgrounds, setBackgrounds] = useState([]);
   const [skillDefs, setSkillDefs] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [char, setChar] = useState(loadCharacter);
   const [view, setView] = useState("build");
   const [itemSearch, setItemSearch] = useState("");
-  const [hpAdjust, setHpAdjust] = useState(1);
-  const [manaAdjust, setManaAdjust] = useState(1);
+  const [shareMsg, setShareMsg] = useState("");
   const importRef = useRef();
   const firstLoad = useRef(true);
+
+  const initialRef = useRef(null);
+  if (initialRef.current === null) initialRef.current = loadActiveCharacterState();
+  const [activeId, setActiveId] = useState(initialRef.current.activeId);
+  const [characters, setCharacters] = useState(initialRef.current.characters);
+  const [char, setChar] = useState(initialRef.current.data);
 
   useEffect(() => {
     Promise.all([
@@ -201,26 +340,63 @@ function App() {
     ]).then(([c, b, s, it]) => { setClasses(c); setBackgrounds(b); setSkillDefs(s); setItems(it); setLoading(false); });
   }, []);
 
+  // ── Persist the active character, and keep the switcher list synced ──
   useEffect(() => {
     if (firstLoad.current) { firstLoad.current = false; return; }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(char));
-  }, [char]);
+    saveCharacterData(activeId, char);
+  }, [activeId, char]);
+  useEffect(() => { localStorage.setItem("flagondice-characters", JSON.stringify(characters)); }, [characters]);
+  useEffect(() => { localStorage.setItem("flagondice-active-character", activeId); }, [activeId]);
+  useEffect(() => {
+    setCharacters(cs => cs.some(c => c.id === activeId && c.name === char.charName)
+      ? cs
+      : cs.map(c => c.id === activeId ? { ...c, name: char.charName } : c));
+  }, [char.charName, activeId]);
 
   const set = patch => setChar(c => ({ ...c, ...patch }));
+
+  const switchCharacter = id => {
+    if (id === activeId) return;
+    setActiveId(id);
+    setChar(loadCharacterData(id));
+  };
+
+  // Used by "+ New", importing a file, opening a share link, and
+  // Duplicate — always adds a fresh slot and switches to it, so nothing
+  // already open can be overwritten by someone else's link or file.
+  const addCharacterSlot = (data = {}, { switchView } = {}) => {
+    const id = makeUid();
+    const full = { ...emptyCharacter(), ...data };
+    saveCharacterData(id, full);
+    setCharacters(cs => [...cs, { id, name: full.charName || "" }]);
+    setActiveId(id);
+    setChar(full);
+    if (switchView) setView(switchView);
+    return id;
+  };
+
+  const deleteCharacter = id => {
+    if (characters.length <= 1) return;
+    localStorage.removeItem(`flagondice-char-${id}`);
+    setCharacters(cs => {
+      const next = cs.filter(c => c.id !== id);
+      if (id === activeId) {
+        setActiveId(next[0].id);
+        setChar(loadCharacterData(next[0].id));
+      }
+      return next;
+    });
+  };
+
+  const duplicateCharacter = () => {
+    addCharacterSlot({ ...char, charName: char.charName ? `${char.charName} (copy)` : "Unnamed adventurer (copy)" });
+  };
 
   const cls = classes.find(c => c.id === char.classId) || null;
   const spec = cls ? cls.specializations.find(s => s.id === char.specId) : null;
   const stats = computeStats(cls, spec, char.level, char.heroBlessing);
-
-  // Current Health/Mana ride along with the computed max — clamp down if
-  // a level-down or respec drops the max below where current already sat.
-  useEffect(() => {
-    if (!cls) return;
-    set({
-      hpCurrent: Math.min(char.hpCurrent || stats.health, stats.health) || stats.health,
-    });
-    // eslint-disable-next-line
-  }, [cls && cls.id]);
+  const skillBudget = skillPointBudget(char, cls);
+  const skillSpent = Object.values(char.skills).reduce((a, b) => a + b, 0);
 
   const chooseClass = id => {
     const next = classes.find(c => c.id === id);
@@ -245,14 +421,22 @@ function App() {
     else if (known.length < slots) set({ knownTrainings: [...char.knownTrainings, name] });
   };
 
-  const activeFeatures = [];
+  // Builder shows every active feature, stat-only ones included.
+  const activeFeaturesAll = [];
   if (cls) {
-    activeFeatures.push({ name: cls.resourceAbility.name, text: cls.resourceAbility.text });
-    cls.levels.filter(l => l.level <= char.level && l.level !== 2 && l.level !== 10).forEach(l => l.text.forEach(t => activeFeatures.push({ name: `Level ${l.level}`, text: t })));
+    activeFeaturesAll.push({ name: cls.resourceAbility.name, text: cls.resourceAbility.text, statOnly: false });
+    cls.levels.filter(l => l.level <= char.level && l.level !== 2 && l.level !== 10).forEach(l =>
+      l.text.forEach(t => activeFeaturesAll.push({ name: `Level ${l.level}`, text: t, statOnly: STAT_ONLY_LINE.test(t) }))
+    );
   }
   if (spec) {
-    spec.levels.filter(l => l.level <= char.level).forEach(l => l.abilities.forEach(a => activeFeatures.push({ name: a.name, text: a.text })));
+    spec.levels.filter(l => l.level <= char.level).forEach(l =>
+      l.abilities.forEach(a => activeFeaturesAll.push({ name: a.name, text: a.text, statOnly: STAT_ONLY_NAMES.has(a.name) }))
+    );
   }
+  // Sheet hides the stat-only ones — they're already reflected in the
+  // stat row above, so listing them again would just be noise.
+  const classFeaturesForSheet = activeFeaturesAll.filter(f => !f.statOnly);
 
   const background = backgrounds.find(b => b.id === char.backgroundId) || null;
 
@@ -280,16 +464,18 @@ function App() {
   const updateNoteRow = (id, text) => set({ noteRows: char.noteRows.map(r => r.id === id ? { ...r, text } : r) });
   const removeNoteRow = id => set({ noteRows: char.noteRows.filter(r => r.id !== id) });
 
-  // ── HP / Mana quick adjust — the "different method" for tracking current
-  // values separately from the auto-computed max, lives on the sheet.
+  // ── HP / Mana quick adjust ──
   const applyHp = delta => set({ hpCurrent: Math.max(0, Math.min(stats.health, char.hpCurrent + delta)) });
   const applyMana = delta => set({ manaCurrent: Math.max(0, Math.min(stats.mana || 0, char.manaCurrent + delta)) });
+  const resetHp = () => set({ hpCurrent: stats.health });
+  const resetMana = () => set({ manaCurrent: stats.mana || 0 });
 
+  // ── Export / Import / Share ──
   const doExport = () => {
     const blob = new Blob([JSON.stringify(char, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `${char.charName || "flagon-dice-character"}.json`;
+    a.href = url; a.download = `${(char.charName || "flagon-dice-character").replace(/\s+/g, "-")}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -297,11 +483,41 @@ function App() {
     const file = e.target.files[0];
     if (!file) return;
     file.text().then(txt => {
-      try { setChar({ ...emptyCharacter(), ...JSON.parse(txt) }); }
+      try { addCharacterSlot(JSON.parse(txt)); }
       catch { alert("That file doesn't look like a valid character export."); }
     });
     e.target.value = "";
   };
+  const doShare = () => {
+    const encoded = encChar({
+      charName: char.charName, backgroundId: char.backgroundId, skills: char.skills,
+      classId: char.classId, specId: char.specId, level: char.level,
+      knownTrainings: char.knownTrainings, heroBlessing: char.heroBlessing,
+    });
+    const url = window.location.href.split("#")[0] + "#char=" + encoded;
+    const legacyCopy = () => {
+      const ta = document.createElement("textarea");
+      ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch {}
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => setShareMsg("Link copied!")).catch(legacyCopy);
+    } else legacyCopy();
+    setTimeout(() => setShareMsg(""), 4500);
+  };
+
+  // ── Opening a shared link lands in a new slot, never overwrites
+  // whatever's currently open ──
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith("#char=")) return;
+    const decoded = decChar(hash.slice(6));
+    window.history.replaceState(null, "", window.location.href.split("#")[0]);
+    if (decoded) addCharacterSlot(decoded, { switchView: "build" });
+    // eslint-disable-next-line
+  }, []);
 
   const tabStyle = key => ({
     padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
@@ -316,6 +532,12 @@ function App() {
     border: `0.5px solid #2f5a67`,
     textDecoration: "none", display: "inline-flex", alignItems: "center",
   };
+  const actionBtn = (danger = false) => ({
+    padding: "6px 14px", fontSize: 13, fontWeight: 500, borderRadius: 6,
+    background: "transparent",
+    color: danger ? "#c0392b" : TEXT.muted,
+    border: `0.5px solid ${danger ? "#c0392b" : BORDER}`,
+  });
 
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
@@ -336,7 +558,23 @@ function App() {
           <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
         </div>
 
-        <div className="site-header-left" />
+        {/* Character switcher */}
+        <div className="site-header-left" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <select
+            value={activeId}
+            onChange={e => switchCharacter(e.target.value)}
+            style={{ maxWidth: 160, padding: "6px 8px" }}
+          >
+            {characters.map(c => <option key={c.id} value={c.id}>{c.name || "Unnamed adventurer"}</option>)}
+          </select>
+          <button onClick={() => addCharacterSlot({}, { switchView: "build" })} title="New character" style={actionBtn()}>+ New</button>
+          {characters.length > 1 && (
+            <button
+              onClick={() => { if (confirm(`Delete "${char.charName || "Unnamed adventurer"}"? This can't be undone.`)) deleteCharacter(activeId); }}
+              title="Delete this character" style={actionBtn(true)}
+            >Delete</button>
+          )}
+        </div>
 
         <div className="site-header-nav" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <button onClick={() => setView("build")} style={tabStyle("build")}>Builder</button>
@@ -391,12 +629,20 @@ function App() {
             </Section>
 
             <Section title="Skills">
-              <div className="field-grid-3" style={{ rowGap: 12 }}>
+              <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 10 }}>
+                Skill points: <strong style={{ color: skillSpent >= skillBudget ? ACCENT : TEXT.name }}>{skillSpent} / {skillBudget}</strong>
+                <span style={{ marginLeft: 6, fontSize: 11 }}>(1 from character creation{char.backgroundId ? ", +1 from Background" : ""}{cls && char.level >= 4 ? ", +1 at level 4" : ""}{cls && char.level >= 7 ? ", +1 at level 7" : ""}{char.level >= 10 && char.heroBlessing === "skill" ? ", +1 from Hero's Blessing" : ""})</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {skillDefs.map(s => (
-                  <Field key={s.name} label={s.name}>
-                    <input type="number" min="0" value={char.skills[s.name] || 0}
-                      onChange={e => set({ skills: { ...char.skills, [s.name]: Math.max(0, Number(e.target.value) || 0) } })} />
-                  </Field>
+                  <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <span style={{ fontSize: 14, color: TEXT.body }}>{s.name}</span>
+                    <SkillPipsEditable
+                      value={char.skills[s.name] || 0}
+                      disabled={skillSpent >= skillBudget}
+                      onChange={n => set({ skills: { ...char.skills, [s.name]: Math.max(0, n) } })}
+                    />
+                  </div>
                 ))}
               </div>
             </Section>
@@ -463,14 +709,28 @@ function App() {
                       </Field>
                     </div>
                   )}
+
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Active features (incl. stat bonuses)</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {activeFeaturesAll.map((f, i) => (
+                        <div key={i} style={{ fontSize: 12, color: f.statOnly ? TEXT.faint : TEXT.body, lineHeight: 1.5 }}>
+                          <strong style={{ color: f.statOnly ? TEXT.faint : TEXT.name }}>{f.name}</strong>: {f.text}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </>
               )}
             </Section>
 
-            <div className="no-print" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={doExport} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 13 }}>Export</button>
-              <button onClick={() => importRef.current.click()} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 13 }}>Import</button>
-              <input ref={importRef} type="file" accept="application/json" onChange={doImport} style={{ display: "none" }} />
+            <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button onClick={doExport} style={actionBtn()}>Export</button>
+              <button onClick={() => importRef.current.click()} style={actionBtn()}>Import</button>
+              <input ref={importRef} type="file" accept=".json,application/json" onChange={doImport} style={{ display: "none" }} />
+              <button onClick={doShare} style={actionBtn()}>Copy share link</button>
+              <button onClick={duplicateCharacter} style={actionBtn()}>Duplicate</button>
+              {shareMsg && <span style={{ fontSize: 13, color: ACCENT }}>{shareMsg}</span>}
             </div>
           </>
         )}
@@ -534,7 +794,9 @@ function App() {
           </>
         )}
 
-        {/* ═══ CHARACTER SHEET (stripped-down, for display) ═══ */}
+        {/* ═══ CHARACTER SHEET (stripped-down, for display) ═══
+             Order: stats, skill summary, attacks, trainings/spells,
+             background passives, class/specialization passives. */}
         {view === "sheet" && (
           <div className="sheet-box" style={{ background: PANEL, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
@@ -549,32 +811,30 @@ function App() {
             </div>
             {char.charConcept && <div style={{ fontSize: 13, color: TEXT.body, marginTop: 10, lineHeight: 1.6 }}>{char.charConcept}</div>}
 
+            {/* Stats row — Armor/Speed read-only, Health/Mana trackable */}
             <div className="field-grid-4" style={{ margin: "16px 0" }}>
               <StatChip label="Armor" value={stats.armor} />
               <StatChip label="Speed" value={stats.speed} />
-              <StatChip label="Health" value={`${char.hpCurrent} / ${stats.health}`} />
-              <StatChip label="Mana" value={stats.mana !== null ? `${char.manaCurrent} / ${stats.mana}` : null} />
+              <TrackedStatChip label="Health" current={char.hpCurrent} max={stats.health} onAdjust={applyHp} onReset={resetHp} />
+              {stats.mana !== null && <TrackedStatChip label="Mana" current={char.manaCurrent} max={stats.mana} onAdjust={applyMana} onReset={resetMana} />}
             </div>
 
-            <div className="no-print" style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12, color: TEXT.faint }}>Health</span>
-                <input type="number" min="1" style={{ width: 60 }} value={hpAdjust} onChange={e => setHpAdjust(Math.max(1, Number(e.target.value) || 1))} />
-                <button onClick={() => applyHp(-hpAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "4px 10px" }}>− Damage</button>
-                <button onClick={() => applyHp(hpAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#7bc47f", padding: "4px 10px" }}>+ Heal</button>
+            {/* Skill point summary */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Skills</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {skillDefs.map(s => (
+                  <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: TEXT.body }}>
+                    <span>{s.name}</span>
+                    <SkillPipsReadOnly value={char.skills[s.name] || 0} />
+                  </div>
+                ))}
               </div>
-              {stats.mana !== null && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 12, color: TEXT.faint }}>Mana</span>
-                  <input type="number" min="1" style={{ width: 60 }} value={manaAdjust} onChange={e => setManaAdjust(Math.max(1, Number(e.target.value) || 1))} />
-                  <button onClick={() => applyMana(-manaAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "4px 10px" }}>− Spend</button>
-                  <button onClick={() => applyMana(manaAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#7bc47f", padding: "4px 10px" }}>+ Restore</button>
-                </div>
-              )}
             </div>
 
+            {/* Attacks */}
             {cls && cls.attacks.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
+              <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Attacks</div>
                 {cls.attacks.map((a, i) => (
                   <div key={i} style={{ fontSize: 13, color: TEXT.body }}>{a.name}: {a.toHit} to hit, {a.damage} dmg, Range {a.range}</div>
@@ -582,14 +842,9 @@ function App() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
-              {skillDefs.map(s => (char.skills[s.name] || 0) > 0 && (
-                <div key={s.name} style={{ fontSize: 12, color: TEXT.body }}>{s.name} <strong style={{ color: TEXT.name }}>+{char.skills[s.name]}</strong></div>
-              ))}
-            </div>
-
+            {/* Trainings / spells */}
             {known.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
+              <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
                   {cls ? cls.trainingsLabel : "Trainings"}
                 </div>
@@ -601,20 +856,33 @@ function App() {
               </div>
             )}
 
-            {char.heroBlessing && (
-              <div style={{ fontSize: 12, color: TEXT.body, marginBottom: 14 }}>
-                <strong style={{ color: TEXT.name }}>Hero's Blessing</strong>: {(HERO_BLESSINGS.find(h => h.id === char.heroBlessing) || {}).label}
-              </div>
-            )}
-
-            {activeFeatures.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Features</div>
-                {activeFeatures.map((f, i) => (
+            {/* Background passives */}
+            {background && background.features.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Background — {background.name}</div>
+                {background.features.map((f, i) => (
                   <div key={i} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 4 }}>
                     <strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Class / specialization passives — stat-only entries hidden */}
+            {classFeaturesForSheet.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Class Features</div>
+                {classFeaturesForSheet.map((f, i) => (
+                  <div key={i} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 4 }}>
+                    <strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {char.heroBlessing && (char.heroBlessing === "damage" || char.heroBlessing === "skill") && (
+              <div style={{ fontSize: 12, color: TEXT.body, marginBottom: 16 }}>
+                <strong style={{ color: TEXT.name }}>Hero's Blessing</strong>: {(HERO_BLESSINGS.find(h => h.id === char.heroBlessing) || {}).label}
               </div>
             )}
 
