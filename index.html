@@ -981,7 +981,7 @@ function App() {
                     const grantLines = (item && item.grants || []).map(g => {
                       if (g.type === "training") {
                         const t = bonusTrainings.find(bt => bt.id === g.trainingId);
-                        return t ? `teaches ${t.name}` : null;
+                        return t ? `Teaches ${t.name}` : null;
                       }
                       if (g.type === "freeCasts") {
                         const t = bonusTrainings.find(bt => bt.id === g.trainingId);
@@ -991,11 +991,22 @@ function App() {
                       return null;
                     }).filter(Boolean);
                     return (
-                      <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, fontSize: 13 }}>
-                        <span style={{ color: TEXT.body }}>
+                      <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, fontSize: 13 }}>
+                        <div>
                           <strong style={{ color: TEXT.name }}>{entry.itemName}</strong>
-                          <span style={{ color: TEXT.faint }}> — {grantLines.join(", ") || "no longer in the item data"}</span>
-                        </span>
+                          {/* Builder errs toward detail: each permanent
+                              effect a source grants gets its own line,
+                              rather than being folded into one summary
+                              string — the sheet stays terser (see the
+                              Bonus Spells & Trainings / stat row instead). */}
+                          {grantLines.length > 0 ? (
+                            <ul style={{ margin: "3px 0 0 18px", padding: 0, color: TEXT.body }}>
+                              {grantLines.map((line, i) => <li key={i}>{line}</li>)}
+                            </ul>
+                          ) : (
+                            <div style={{ color: TEXT.faint, marginTop: 3 }}>no longer in the item data</div>
+                          )}
+                        </div>
                         <button onClick={() => unlearnItem(entry.id)} title="Undo — reverses these effects and returns the item to Inventory" style={{ background: "transparent", border: "0.5px solid #c0392b", color: "#c0392b", borderRadius: 6, padding: "3px 10px", fontSize: 12, flexShrink: 0 }}>Remove</button>
                       </div>
                     );
