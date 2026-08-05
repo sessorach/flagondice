@@ -54,6 +54,14 @@
     .item-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
     @media (min-width: 700px) { .item-grid { grid-template-columns: repeat(2, 1fr); } }
 
+    /* Pairs a compact block (Concept / the sheet's identity header) with
+       the equally-compact Skills block, so Skills isn't a sparse
+       full-width row on its own. */
+    .pair-grid { display: block; }
+    @media (min-width: 700px) {
+      .pair-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    }
+
     @media print {
       @page { margin: 0.4in; }
       .no-print { display: none !important; }
@@ -369,23 +377,28 @@ function SkillPipsReadOnly({ value }) {
 // that many points (clicking the currently-topmost filled pip again
 // clears it back down by one). Increases are blocked once the total
 // spent across all skills hits the character's skill point budget.
-function SkillPipsEditable({ value, onChange, disabled }) {
+function SkillPipsEditable({ value, onChange, skillSpent, skillBudget }) {
   return (
     <span style={{ letterSpacing: 2 }}>
       {Array.from({ length: MAX_SKILL_PIPS }, (_, i) => {
         const n = i + 1;
         const filled = n <= value;
-        const wouldDisable = !filled && disabled;
+        // A click on pip n jumps straight to n (not +1), so the budget
+        // check has to be delta-aware: would setting THIS skill to n —
+        // replacing its current contribution — push total spend over
+        // budget? A single "spent >= budget" flag doesn't catch a jump
+        // of more than 1 pip while under budget.
+        const wouldExceed = n > value && (skillSpent - value + n) > skillBudget;
         return (
           <button
             key={i}
             onClick={() => onChange(value === n ? n - 1 : n)}
-            disabled={wouldDisable}
+            disabled={wouldExceed}
             title={`${n} point${n > 1 ? "s" : ""}`}
             style={{
               background: "transparent", border: "none", padding: 0, marginRight: 2,
-              color: filled ? ACCENT : (wouldDisable ? "#2a221a" : BORDER),
-              fontSize: 17, lineHeight: 1, cursor: wouldDisable ? "not-allowed" : "pointer",
+              color: filled ? ACCENT : (wouldExceed ? "#2a221a" : BORDER),
+              fontSize: 17, lineHeight: 1, cursor: wouldExceed ? "not-allowed" : "pointer",
             }}
           >
             {filled ? "●" : "○"}
@@ -771,19 +784,50 @@ function App() {
         {/* ═══ BUILDER ═══ */}
         {view === "build" && (
           <>
-            <Section title="Concept">
-              <div className="field-grid" style={{ marginBottom: 10 }}>
-                <Field label="Name">
-                  <input type="text" value={char.charName} onChange={e => set({ charName: e.target.value })} />
+            <div className="pair-grid">
+              <Section title="Concept">
+                <div className="field-grid" style={{ marginBottom: 10 }}>
+                  <Field label="Name">
+                    <input type="text" value={char.charName} onChange={e => set({ charName: e.target.value })} />
+                  </Field>
+                  <Field label="Level">
+                    <input type="number" min="1" max="10" value={char.level} onChange={e => set({ level: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
+                  </Field>
+                </div>
+                <Field label="Concept / backstory">
+                  <textarea rows="2" value={char.charConcept} onChange={e => set({ charConcept: e.target.value })} />
                 </Field>
-                <Field label="Level">
-                  <input type="number" min="1" max="10" value={char.level} onChange={e => set({ level: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
-                </Field>
-              </div>
-              <Field label="Concept / backstory">
-                <textarea rows="2" value={char.charConcept} onChange={e => set({ charConcept: e.target.value })} />
-              </Field>
-            </Section>
+              </Section>
+
+              <Section title="Skills">
+                <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 10 }}>
+                  Free skill points: <strong style={{ color: skillSpent >= skillBudget ? ACCENT : TEXT.name }}>{skillSpent} / {skillBudget}</strong>
+                  <span style={{ marginLeft: 6, fontSize: 11 }}>(1 from character creation{char.level >= 4 ? ", +1 at level 4" : ""}{char.level >= 7 ? ", +1 at level 7" : ""}{char.level >= 10 && char.heroBlessing === "skill" ? ", +1 from Hero's Blessing" : ""})</span>
+                </div>
+                {background && background.skillChoices.length > 0 && (
+                  <div style={{ fontSize: 11, color: TEXT.faint, marginBottom: 10 }}>
+                    Your Background's skill point(s) are chosen in the Background section — they don't come out of this pool.
+                  </div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {skillDefs.map(s => (
+                    <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <span style={{ fontSize: 14, color: TEXT.body }}>{s.name}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <SkillPipsEditable
+                          value={char.skills[s.name] || 0}
+                          skillSpent={skillSpent}
+                          skillBudget={skillBudget}
+                          onChange={n => set({ skills: { ...char.skills, [s.name]: Math.max(0, n) } })}
+                        />
+                        {bgBonusMap[s.name] > 0 && <span style={{ fontSize: 11, color: ACCENT }}>+{bgBonusMap[s.name]} bg</span>}
+                        <span style={{ fontSize: 12, color: TEXT.faint, minWidth: 46, textAlign: "right" }}>Total {finalSkillValue(s.name)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </div>
 
             <Section title="Background">
               <Field label="Choose a Background">
@@ -841,34 +885,6 @@ function App() {
                   ))}
                 </div>
               )}
-            </Section>
-
-            <Section title="Skills">
-              <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 10 }}>
-                Free skill points: <strong style={{ color: skillSpent >= skillBudget ? ACCENT : TEXT.name }}>{skillSpent} / {skillBudget}</strong>
-                <span style={{ marginLeft: 6, fontSize: 11 }}>(1 from character creation{char.level >= 4 ? ", +1 at level 4" : ""}{char.level >= 7 ? ", +1 at level 7" : ""}{char.level >= 10 && char.heroBlessing === "skill" ? ", +1 from Hero's Blessing" : ""})</span>
-              </div>
-              {background && background.skillChoices.length > 0 && (
-                <div style={{ fontSize: 11, color: TEXT.faint, marginBottom: 10 }}>
-                  Your Background's skill point(s) are chosen above and locked to those options — they don't come out of this pool.
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {skillDefs.map(s => (
-                  <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <span style={{ fontSize: 14, color: TEXT.body }}>{s.name}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <SkillPipsEditable
-                        value={char.skills[s.name] || 0}
-                        disabled={skillSpent >= skillBudget}
-                        onChange={n => set({ skills: { ...char.skills, [s.name]: Math.max(0, n) } })}
-                      />
-                      {bgBonusMap[s.name] > 0 && <span style={{ fontSize: 11, color: ACCENT }}>+{bgBonusMap[s.name]} bg</span>}
-                      <span style={{ fontSize: 12, color: TEXT.faint, minWidth: 46, textAlign: "right" }}>Total {finalSkillValue(s.name)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </Section>
 
             <Section title="Class">
@@ -1085,7 +1101,24 @@ function App() {
               </div>
               <button className="no-print" onClick={() => window.print()} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 13 }}>Print</button>
             </div>
-            {char.charConcept && <div style={{ fontSize: 13, color: TEXT.body, marginTop: 10, lineHeight: 1.6 }}>{char.charConcept}</div>}
+            {/* Identity (name/meta/concept) paired with the Skills summary
+                so Skills isn't a sparse full-width row by itself. */}
+            <div className="pair-grid" style={{ marginTop: 10 }}>
+              <div>
+                {char.charConcept && <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6 }}>{char.charConcept}</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Skills</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {skillDefs.map(s => (
+                    <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: TEXT.body }}>
+                      <span>{s.name}</span>
+                      <SkillPipsReadOnly value={finalSkillValue(s.name)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             {/* Stats row — Armor/Speed read-only, Health/Mana trackable */}
             <div className="field-grid-4" style={{ margin: "16px 0" }}>
@@ -1095,18 +1128,6 @@ function App() {
               {stats.mana !== null && <TrackedStatChip label="Mana" current={char.manaCurrent} max={stats.mana} onAdjust={applyMana} onReset={resetMana} />}
             </div>
 
-            {/* Skill point summary */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Skills</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {skillDefs.map(s => (
-                  <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: TEXT.body }}>
-                    <span>{s.name}</span>
-                    <SkillPipsReadOnly value={finalSkillValue(s.name)} />
-                  </div>
-                ))}
-              </div>
-            </div>
 
             {/* Attacks */}
             {cls && cls.attacks.length > 0 && (
