@@ -1,0 +1,54 @@
+[
+  {
+    "id": "dumal",
+    "name": "Dumal",
+    "description": "A hardy people, traditionally hailing from the brutal deserts and other fringes of the world.",
+    "skills": "Put a point in either Athletics or Notice.",
+    "features": [
+      { "name": "Tough", "text": "Increase your maximum Health by 1." }
+    ]
+  },
+  {
+    "id": "erehai",
+    "name": "Erehai",
+    "description": "A thoughtful culture, known as recluses who do sparing trade with others and instead focus on art and philosophy.",
+    "skills": "Put a point in either Convince or Expertise.",
+    "features": [
+      { "name": "Mana Bolt", "text": "As a Main Action, you can make an attack with a Range of 3, 2d6 to hit, dealing 2d6 damage on a hit. This is free to use the first time each encounter, after that it costs 1 Mana." }
+    ]
+  },
+  {
+    "id": "wildfolk",
+    "name": "Wildfolk",
+    "description": "",
+    "skills": "Put a point in either Athletics or Convince. Put a point in either Notice or Sneak.",
+    "features": []
+  },
+  {
+    "id": "sachantha",
+    "name": "Sachantha",
+    "description": "",
+    "skills": "Put a point in either Athletics or Notice.",
+    "features": [
+      { "name": "Strategic Planning", "text": "Once per encounter, increase either your Speed by 1 until the end of your turn or an ally's Speed by 1 until the end of their next turn." }
+    ]
+  },
+  {
+    "id": "gorok",
+    "name": "Gorok",
+    "description": "",
+    "skills": "Put a point in either Convince or Sneak.",
+    "features": [
+      { "name": "First Strike", "text": "The first attack you make each encounter deals +2 dice of damage." }
+    ]
+  },
+  {
+    "id": "maisen",
+    "name": "Maisen",
+    "description": "A swamp-dwelling tribe renowned and shunned for their sinister cultural affinity for alchemy.",
+    "skills": "Put a point in either Expertise or Sneak.",
+    "features": [
+      { "name": "Blinding Powder", "text": "Once per encounter, choose an adjacent enemy; the next attack against them gets +1 die to hit." }
+    ]
+  }
+]

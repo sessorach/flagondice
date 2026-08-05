@@ -1,0 +1,7 @@
+[
+  { "term": "Bleed", "text": "At the start of your turn, if you have any Bleeds, remove one and take 1 damage." },
+  { "term": "Exhaustion", "text": "For each stack of Exhaustion you have, your maximum Health is reduced by 1. Exhaustion goes away when you get a chance to rest for the night. Some effects give you \"temporary\" Exhaustion, which is tracked separately — these go away at the end of the encounter." },
+  { "term": "Immobilize", "text": "Being Immobilized means you can't move. You can still be Pushed by things, and you can still Shift." },
+  { "term": "Push", "text": "Pushing someone is like Shifting, except when you do it to an enemy. Unless otherwise stated, you Push things in a direction directly away from you. If someone is Pushed into an obstacle that isn't a creature, they probably just stop there (unless the GM decides something more specific happens)." },
+  { "term": "Shift", "text": "Shifting is like moving, except it doesn't count against your Speed, and you can Shift through spaces with enemies in them (but not end up in an occupied space)." }
+]

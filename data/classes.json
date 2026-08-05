@@ -1,0 +1,447 @@
+[
+  {
+    "id": "warrior",
+    "name": "The Warrior",
+    "tagline": "A strong close-quarters fighter who engages enemies and keeps them at bay.",
+    "role": "Combat Controller",
+    "difficulty": 1,
+    "stats": { "health": 11, "armor": 5, "speed": 2, "mana": null },
+    "attacks": [
+      { "name": "Melee Attack", "toHit": "2d6", "damage": "1d6", "range": 1 }
+    ],
+    "resourceAbility": {
+      "name": "Warrior's Training",
+      "text": "Once per round, you may use one of your Warrior's Trainings. You learn one Warrior's Training of your choice from the list below when you get this ability. Some Trainings require you to be a higher level to learn them. Each time you gain a level, you may trade one of the Warrior's Trainings you know for a different one."
+    },
+    "trainingsLabel": "Warrior's Training",
+    "baseTrainings": [
+      { "name": "Challenger", "text": "All enemies next to you can only attack you for 1 round.", "levelReq": 1 },
+      { "name": "Second Wind", "text": "You heal 1 Health.", "levelReq": 1 },
+      { "name": "Blitz", "text": "Shift 2 spaces in a straight line. If you make a Melee attack directly afterwards, it deals +1 die of damage.", "levelReq": 3 },
+      { "name": "Resounding Blow", "text": "For the next Melee attack you make this turn, if it hits you may push the target up to 3 spaces away from you, and if it misses you may push them up to 1 space away from you.", "levelReq": 6 }
+    ],
+    "levels": [
+      { "level": 2, "text": ["Specialization — Choose one of the specializations below: Berserker, Monk, or Vanguard."] },
+      { "level": 3, "text": ["Warrior's Training — You learn one Warrior's Training of your choice from any list available to you."] },
+      { "level": 4, "text": ["Your Health increases by 7.", "Adventurer's Knowledge — You gain a point of training in a Skill of your choice."] },
+      { "level": 6, "text": ["Warrior's Training — You learn one Warrior's Training of your choice from any list available to you."] },
+      { "level": 7, "text": ["Your Health increases by 6.", "Adventurer's Knowledge — You gain a point of training in a Skill of your choice."] },
+      { "level": 9, "text": ["Warrior's Training — You learn one Warrior's Training of your choice from any list available to you."] },
+      { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Speed increases by 1."] }
+    ],
+    "specializations": [
+      {
+        "id": "berserker",
+        "name": "Berserker",
+        "tagline": "A mighty warrior who relies on pure bloodlust in battle, rather than puny armor, shields, or caution of any kind.",
+        "role": "Combat Striker",
+        "difficulty": 1,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Armor", "text": "Your Armor is reduced by 1 (to a base of 4)." },
+            { "name": "Bloodlust", "text": "Each time you take damage, until the end of your turn you gain +1 Speed and your Melee attacks deal +1 die of damage. Whenever you hit with a Melee attack, heal 1 Health." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Bloodlust", "text": "Whenever you would take damage, if you have no Bleeds, instead of taking the damage you can choose to gain that many Bleeds. (At the start of your turn, if you have any Bleeds, remove one and take 1 damage)" }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Bloodlust", "text": "At the start of your turn, after you take damage from any Bleeds you have, you may remove one Bleed from yourself (if you have any left)." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Blood Rush", "text": "You take 1 damage, and gain +1 Speed for a round. This can be used any number of times on your turn, and doesn't count against your limit of Trainings for the turn.", "levelReq": 1 },
+          { "name": "Furious Swing", "text": "This turn, the first time your Melee attack Downs an enemy, you may make another Melee attack immediately afterwards.", "levelReq": 1 },
+          { "name": "Lick Wounds", "text": "Remove up to 1 Bleed from yourself. Your Melee attacks deal +1 die of damage this turn.", "levelReq": 5 },
+          { "name": "Flex Muscles", "text": "Your Armor increases by 1 for 1 round.", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "monk",
+        "name": "Monk",
+        "tagline": "A quick, evasive fighter who supports allies and debilitates foes with their spiritual energy.",
+        "role": "Support Striker",
+        "difficulty": 2,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Speed", "text": "Your Speed increases by 1 (to a base of 3)." },
+            { "name": "Ki Master", "text": "When you hit with a Melee attack, and whenever an attack misses you, you gain 1 Ki point. You lose all your Ki points when the encounter ends. Any time on your turn, as much as you like, you may spend Ki points: (1 Ki) Shift up to 2 spaces. (1 Ki) Choose an enemy next to you — the next attack against them this fight deals +1 die of damage. (2 Ki) Choose an enemy next to you — the next attack against them this fight gains +1 die to hit. (2 Ki) You heal 1 Health." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Ki Master", "text": "When you would make your Melee attack, you may make 2 Melee attacks instead of 1, which each get the effect but their damage dice become d3s." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Ki Master", "text": "The first time on your turn that you hit an enemy with a Melee attack, their soul is marked for 1 round. When an ally hits the marked enemy with an attack, you gain 1 Ki point." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Meditation", "text": "You gain 2 Ki points.", "levelReq": 1 },
+          { "name": "Weighted Kunai", "text": "Your next Melee attack has +2 Range. If it hits, Push the target up to 2 spaces towards you.", "levelReq": 1 },
+          { "name": "Disintegrating Palm", "text": "Choose an enemy next to you. For 1 round, when you or an ally hits them with an attack, that enemy gains a Bleed.", "levelReq": 5 },
+          { "name": "Waning Soul", "text": "The next time you hit with a Melee attack this turn, the target of the attack has their Armor reduced by 1 for a round. (Only applies once at a time)", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "vanguard",
+        "name": "Vanguard",
+        "tagline": "The sturdy rock of their party, a defender without peer who protects their friends from all manner of harm.",
+        "role": "Combat Controller",
+        "difficulty": 1,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 2." },
+            { "name": "Shield Wall", "text": "Each ally next to you gains +1 Armor, to a maximum of 5." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 1." },
+            { "name": "Shield Wall", "text": "Enemies next to you cannot make ranged attacks against your allies. Other enemies' ranged attacks that target your allies treat your space as a wall or similar impassible obstacle." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 1." },
+            { "name": "Shield Wall", "text": "When an ally next to you is hit with an attack that would deal damage, you may reduce that damage by half (rounded down) and take the difference yourself." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Castle", "text": "Choose an ally within 2 spaces of you, move into their space, then move them into either the space you started in or one you moved through.", "levelReq": 1 },
+          { "name": "Shield Bash", "text": "Choose an enemy next to you. For 1 round, they must roll any attacks twice and keep the lower result.", "levelReq": 1 },
+          { "name": "Focused Guard", "text": "For 1 round, whenever you are hit by an attack, after the attack's effects, your Armor increases by 1 until this effect ends. (Only applies once at a time)", "levelReq": 5 },
+          { "name": "Unbreakable Stone Anchor", "text": "For 1 round, any attack that hits you deals 1 less damage to you.", "levelReq": 8 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rogue",
+    "name": "The Rogue",
+    "tagline": "An opportunistic skirmisher who can safely pick off enemies at range or outmaneuver them in close-quarters combat.",
+    "role": "Combat Striker",
+    "difficulty": 2,
+    "stats": { "health": 9, "armor": 4, "speed": 4, "mana": null },
+    "attacks": [
+      { "name": "Melee Attack", "toHit": "1d6", "damage": "1d6", "range": 1 },
+      { "name": "Ranged Attack", "toHit": "1d6", "damage": "1d6", "range": 3 }
+    ],
+    "resourceAbility": {
+      "name": "Rogue's Precision",
+      "text": "When making your Melee and Ranged attacks, you may re-roll any dice that land on a 1 for rolls to hit and damage."
+    },
+    "trainingsLabel": "Rogue's Training",
+    "baseTrainings": [
+      { "name": "Evasion", "text": "For 1 round, any attack against you must be rolled twice and the lower result used.", "levelReq": 1 },
+      { "name": "Sneak Attack", "text": "The next attack you make this turn deals +2 dice of damage.", "levelReq": 1 },
+      { "name": "Preparation", "text": "Choose an enemy within 3 spaces of you. On your next turn, the next Melee or Ranged attack you make against that enemy has +1 die to hit and damage.", "levelReq": 3 },
+      { "name": "Heart Shot", "text": "If the next attack you make this turn hits, the target gains 2 Bleeds.", "levelReq": 6 }
+    ],
+    "levels": [
+      { "level": 2, "text": ["Specialization — Choose one of the specializations below: Assassin, Bard, or Ranger."] },
+      { "level": 3, "text": ["Rogue's Training — You learn one Rogue's Training of your choice from any list available to you."] },
+      { "level": 4, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 6, "text": ["Rogue's Training — You learn one Rogue's Training of your choice from any list available to you."] },
+      { "level": 7, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 9, "text": ["Rogue's Training — You learn one Rogue's Training of your choice from any list available to you."] },
+      { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Speed increases by 1."] }
+    ],
+    "specializations": [
+      {
+        "id": "assassin",
+        "name": "Assassin",
+        "tagline": "A vicious fighter who takes advantage of a victim's weak spots to cripple and kill them in an instant.",
+        "role": "Combat Striker",
+        "difficulty": 2,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Assassinate", "text": "Whenever you are next to an enemy, and one of your allies is also next to that enemy, you are Flanking that enemy. Once per turn, while Flanking an enemy, you may use a Rogue's Training ability without it counting against your limit for the turn." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Assassinate", "text": "Instead, twice per turn while you are Flanking an enemy, you use a Rogue's Training ability without it counting against your limit for the turn. Or, you may forgo both uses and instead make a Melee Attack against that enemy as a Bonus Action." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Assassinate", "text": "Melee Attacks you make while Flanking deal +1 die of damage." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Expose Armor", "text": "This turn, the next Melee Attack you make against an enemy you're Flanking treats the target as though their Armor were 1 lower.", "levelReq": 1 },
+          { "name": "Shadowstep", "text": "Shift to an empty space next to an enemy within 2 spaces of you. Then, if you are Flanking them, your Armor is increased by 1 against their attacks until your next turn.", "levelReq": 1 },
+          { "name": "Cull the Weak", "text": "This turn, the next Melee Attack you make against an enemy you're Flanking is also made against any other enemies next to both of you. These extra attacks only deal 1 damage on a hit.", "levelReq": 5 },
+          { "name": "Go for the Throat", "text": "This turn, the next Melee Attack you make against an enemy you're Flanking gains +1 die to hit.", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "bard",
+        "name": "Bard",
+        "tagline": "A whimsical friend to their party, provoking foes into missteps and cheering allies to victory.",
+        "role": "Support Controller",
+        "difficulty": 3,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Armor & Health", "text": "Your Armor is reduced by 1 (to a base of 3). Your Health increases by 2." },
+            { "name": "Blunder", "text": "The first time each round that an enemy or ally within 5 spaces of you rolls a 1 to hit with an attack roll, gain a Blunder die. Whenever you gain a Blunder die, roll 1d6 and note the result. Any time an enemy or (willing) ally within 5 spaces of you would make an attack roll to hit or deal damage, before they make the roll, you may spend one of your Blunder dice and have them use that result instead of rolling. This includes dice that would be re-rolled, but must be done before they are rolled again. At the end of combat, you lose all your Blunder dice." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 1." },
+            { "name": "Blunder", "text": "At the start of your turn, you may re-roll any of your Blunder dice. Whenever your Rogue's Precision lets you re-roll a die, gain 1 Blunder die." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 1." },
+            { "name": "Blunder", "text": "At the start of combat, you gain 3 Blunder dice." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Song of Mockery", "text": "You may either gain 1 Blunder die or re-roll 2 of your Blunder dice.", "levelReq": 1 },
+          { "name": "Song of Vigor", "text": "You or an ally within 3 spaces heals 1 Health. You may spend a Blunder die, and if you do instead pick a number of targets up to the die's value.", "levelReq": 1 },
+          { "name": "Song of Shuffling", "text": "You or an ally within 3 spaces gains +3 Speed for 1 round. You may spend a Blunder die, and if you do instead pick a number of targets up to the die's value.", "levelReq": 1 },
+          { "name": "Song of Precision", "text": "An ally within 3 spaces gains your Rogue's Precision ability for 1 round. You may spend a Blunder die, and if you do instead pick a number of targets up to the die's value.", "levelReq": 5 },
+          { "name": "Song of Steeling", "text": "You or an ally within 3 spaces gains +1 Armor for 1 round. You may spend a Blunder die, and if you do instead pick a number of targets up to the die's value.", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "ranger",
+        "name": "Ranger",
+        "tagline": "A careful and tactical fighter who keeps their enemies at bay and uses a variety of woodland tricks to help their allies.",
+        "role": "Combat Controller",
+        "difficulty": 2,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Range", "text": "Your Ranged attack's Range increases by 2 (to a base of 5)." },
+            { "name": "Trick Shot", "text": "For the first Ranged Attack you make on your turn, you may choose one: if it hits, push that creature up to 2 spaces away from you; if it hits, that creature's Speed is reduced by 2 for a round; if it hits, for 1 round that creature must roll any attacks twice and keep the lower result; the attack deals +1 die of damage." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Trick Shot", "text": "You may choose two different Trick Shot options for the first Ranged Attack you make on your turn." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Trick Shot", "text": "Your Ranged attack gains +1 die to hit." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Aimed Shot", "text": "The next Ranged attack you make this turn gains +1 die to hit.", "levelReq": 1 },
+          { "name": "Net Trap", "text": "Choose 3 spaces, in a straight line, all within 5 spaces of you; those spaces are filled with a net wall for the rest of the fight. The wall occupies those spaces and nobody can move into or through it, but everyone can see through it and ranged attacks can go through it. The wall has 2 Armor and 1 Health, and once its Health runs out the entire wall is removed.", "levelReq": 1 },
+          { "name": "Skirmish", "text": "Shift up to 3 spaces.", "levelReq": 5 },
+          { "name": "Exploding Trap", "text": "You place a trap in a space within 3 spaces from you, which is very obvious. At the start of your next turn, all creatures (even allies) within 1 space of it each gain a Bleed.", "levelReq": 8 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "priest",
+    "name": "The Priest",
+    "tagline": "A supportive magic user who heals and bolsters allies.",
+    "role": "Support Controller",
+    "difficulty": 2,
+    "stats": { "health": 10, "armor": 4, "speed": 3, "mana": 8 },
+    "attacks": [
+      { "name": "Melee Attack", "toHit": "1d6", "damage": "1d6", "range": 1 }
+    ],
+    "resourceAbility": {
+      "name": "Rites of Rejuvenation",
+      "text": "At the end of your turn, you or an ally within 3 spaces heals 1 Health. You may spend any amount of Mana to repeat the effect that many times, choosing the same or different targets."
+    },
+    "trainingsLabel": "Priest Spells",
+    "trainingsIntro": "As a Main Action, you can spend 1 Mana and cast a spell you know. You learn two Priest spells of your choice from the list below when you get this ability. Some Spells require you to be a higher level to learn them. Each time you gain a level, you may trade one of the Priest Spells you know for a different one (including any learned at the new level).",
+    "baseTrainings": [
+      { "name": "Healing", "text": "You or an ally within 3 spaces heals 1d6 Health. After you roll, you may spend 1 Mana and roll an additional die and keep the highest; this process may be repeated as much as you like.", "levelReq": 1 },
+      { "name": "Blessed Swiftness", "text": "Choose among you and any allies within 3 spaces, up to 4 total, to gain +2 Speed for 3 rounds.", "levelReq": 1 },
+      { "name": "Armor of Faith", "text": "Choose among you and any allies within 3 spaces, up to 3 total, to gain +1 Armor for 2 rounds. (Only applies once at a time)", "levelReq": 1 },
+      { "name": "Divine Fortitude", "text": "You or an ally within 3 spaces has their Health increased by 2 for the fight, then heals 2 Health.", "levelReq": 1 },
+      { "name": "Forbearance", "text": "Choose yourself or an ally within 3 spaces. For 2 rounds, each time an enemy attacks that character, they must roll that attack twice and keep the lower result.", "levelReq": 3 },
+      { "name": "Sanctuary", "text": "Choose yourself or an ally within 3 spaces of you. For 3 rounds, prevent any damage that would be dealt to that character. This effect is very obvious, and ends if they make an attack or use an ability that affects an enemy.", "levelReq": 6 }
+    ],
+    "levels": [
+      { "level": 2, "text": ["Specialization — Choose one of the specializations below: Apostle, Druid, or Paladin."] },
+      { "level": 3, "text": ["Priest Spells — You learn one Priest Spell of your choice from any list available to you."] },
+      { "level": 4, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 6, "text": ["Priest Spells — You learn one Priest Spell of your choice from any list available to you."] },
+      { "level": 7, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 9, "text": ["Priest Spells — You learn one Priest Spell of your choice from any list available to you."] },
+      { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Mana increases by 3; your Speed increases by 1."] }
+    ],
+    "specializations": [
+      {
+        "id": "apostle",
+        "name": "Apostle",
+        "tagline": "A selfless healer of the wounded, giving their own life force to sustain their allies.",
+        "role": "Support Controller",
+        "difficulty": 2,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Mana", "text": "Your Mana increases by 1 (to a base of 9)." },
+            { "name": "Martyrdom", "text": "When you cast a spell, you may spend 3 Health. If you do, the spell is cast a second time at no Mana cost, and may affect the same or a different creature. If the same spell would affect a creature twice this way, and it has a duration, its effects instead last for twice as many rounds. If you have less than 3 Health, you may instead use this ability by spending all your remaining Health." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Martyrdom", "text": "All of your Spells and abilities may affect allies up to 5 spaces away, instead of their normal range." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Martyrdom", "text": "The first time each fight you are Downed, all allies within 5 spaces of you heal 1d3 Health." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Mark of Mending", "text": "You place up to two blessings, which may be on yourself and/or adjacent allies. The blessings last for 3 rounds, and if a blessed creature loses any Health, the blessing ends and they heal 1d3 Health. (Only applies once at a time)", "levelReq": 1 },
+          { "name": "Blessed Mantle", "text": "You and each ally within 3 spaces of you each reduce damage you take from attacks by 1 for 2 rounds.", "levelReq": 1 },
+          { "name": "Deliverance", "text": "An ally within 5 spaces of you may Shift into an empty space within 5 spaces of you.", "levelReq": 5 },
+          { "name": "Suffusing Light", "text": "You and each ally within 5 spaces of you each increase your maximum Health by 2 for the fight.", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "druid",
+        "name": "Druid",
+        "tagline": "A master of nature, transforming into a variety of vicious beasts to do battle.",
+        "role": "Combat Striker",
+        "difficulty": 3,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Shapeshifting", "text": "Any time on your turn, as much as you like, you may spend 1 Mana and take on an animal form. You may only be in one animal form at a time; taking on a new one replaces your current one. You may leave an animal form any time you like. Forms: Hunter Form (Melee attack deals +2 dice of damage, Speed becomes 4); Tough Hide Form (Armor becomes 5, reduce damage taken by 1); Constrictor Form (enemy hit by your Melee attack can't move on their next turn); Spitter Form (Melee attack's Range becomes 3, +1 die to hit). While in an animal form, you can still cast Spells and use your normal abilities." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Shapeshifting", "text": "When you take on a new animal form (one you're not already in), you heal 2 Health and remove any effects that would Immobilize you or reduce your Speed." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Shapeshifting", "text": "While in an animal form, your Melee attack gains +1 die to hit." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Beast Venom", "text": "If your next Melee attack this turn hits, the target gains 2 Bleeds. This Spell is a Bonus Action.", "levelReq": 1 },
+          { "name": "Faerie Fire", "text": "An enemy within 3 spaces has their Armor reduced by 1 for 1 round. This Spell is a Bonus Action. (Only applies once at a time)", "levelReq": 1 },
+          { "name": "Thorn Shot", "text": "Make an attack with 1d6 to hit, 2 damage, and Range 3. This Spell is a Bonus Action.", "levelReq": 5 },
+          { "name": "Entangle", "text": "Choose an enemy within 3 spaces. At the start of their next turn they must make a difficulty 4 roll or else be Immobilized that turn. This Spell is a Bonus Action.", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "paladin",
+        "name": "Paladin",
+        "tagline": "Takes up arms and armor to protect their cause and their comrades.",
+        "role": "Combat Controller",
+        "difficulty": 2,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Armor, Health & Mana", "text": "Your Armor increases by 1 (to a base of 5). Your Health increases by 2. Your Mana is reduced by 4 (to a base of 4)." },
+            { "name": "Judgment", "text": "At the end of your turn, choose an enemy within 3 spaces of you. They can only attack you for 1 round." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 2." },
+            { "name": "Judgment", "text": "Whenever an enemy next to you attacks one of your allies, after their attack, you may make a Melee attack against them." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 2." },
+            { "name": "Judgment", "text": "The attack from this ability happens before the enemy's attack instead, and if it hits then their attack and any others they make this turn instead target you." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Reckoning", "text": "Make a Melee attack. If it hits, and you end your turn next to the target, they're Immobilized for 1 round.", "levelReq": 1 },
+          { "name": "Sacred Prayer", "text": "You regain 2 Mana. This Spell costs no Mana.", "levelReq": 1 },
+          { "name": "Geas", "text": "Choose an enemy next to you. That enemy cannot move or attack on their next turn.", "levelReq": 5 },
+          { "name": "Holy Blade", "text": "Make a Melee attack. If it hits, you heal Health equal to half the damage (rounded up) done by the attack.", "levelReq": 8 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mage",
+    "name": "The Mage",
+    "tagline": "A tricky magic user who can enchant allies and blast enemies to pieces.",
+    "role": "Support Striker",
+    "difficulty": 3,
+    "stats": { "health": 8, "armor": 4, "speed": 3, "mana": 6 },
+    "attacks": [
+      { "name": "Spell Attack", "toHit": "1d6", "damage": "2d6", "range": 3 }
+    ],
+    "resourceAbility": {
+      "name": "Mark of Flame",
+      "text": "At the start of your turn, choose an enemy within 5 spaces of you and apply a Mark to them which lasts for 1 round. A creature can have multiple Marks on it, and when an attack hits them, for each Mark, that attack deals +1 die of damage. Whenever you would apply a Mark to a creature, you can spend any amount of extra Mana to apply that many extra Marks to the creature."
+    },
+    "trainingsLabel": "Mage Spells",
+    "trainingsIntro": "As a Main Action, you can spend 1 Mana and cast a spell you know. You learn two Mage Spells of your choice from the list below when you get this ability. Some Spells require you to be a higher level to learn them. Each time you gain a level, you may trade one of the Mage Spells you know for a different one (including any learned at the new level).",
+    "baseTrainings": [
+      { "name": "Mystic Blast", "text": "Make a Spell attack with +1 die to hit, plus an extra +1 die to hit for each extra Mana you spend.", "levelReq": 1 },
+      { "name": "Arcane Jaunt", "text": "Shift into an empty space up to 5 spaces away, in a straight line. If you Shift through an enemy's space this way, choose up to one of them and make a Spell attack against them.", "levelReq": 1 },
+      { "name": "Flame Wreath", "text": "Put a wreath of flame on yourself or an ally within 3 spaces. Apply your Mark of Flame to all enemies next to them, then repeat this at the start of your next turn.", "levelReq": 1 },
+      { "name": "Wall of Fire", "text": "Choose a space within 3 spaces, and conjure flame in it that lasts for the fight. Any creature that starts their turn in the flame, or enters it, takes 1 damage and you apply your Mark of Flame to them.", "levelReq": 1 },
+      { "name": "Fireball", "text": "Choose a space within your Spell attack's range, and make a Spell attack against every creature in that space or adjacent to it; this includes your allies, but not yourself. Against any creature without your Mark on them, the damage dice of this attack are d3s.", "levelReq": 3 },
+      { "name": "Inferno", "text": "Choose an enemy within 3 spaces and apply three Marks of Flame to them. If they are Downed before the start of your next turn, you may move any Marks on them to another enemy within 3 spaces of them; these Marks last their normal duration.", "levelReq": 6 }
+    ],
+    "levels": [
+      { "level": 2, "text": ["Specialization — Choose one of the specializations below: Enchanter, Spellblade, or Warlock."] },
+      { "level": 3, "text": ["Mage Casting — You learn one Mage Spell of your choice from any list available to you."] },
+      { "level": 4, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 6, "text": ["Mage Casting — You learn one Mage Spell of your choice from any list available to you."] },
+      { "level": 7, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 9, "text": ["Mage Casting — You learn one Mage Spell of your choice from any list available to you."] },
+      { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Mana increases by 3; your Speed increases by 1."] }
+    ],
+    "specializations": [
+      {
+        "id": "enchanter",
+        "name": "Enchanter",
+        "tagline": "A wise magician who lends considerable magic power to their allies, allowing them to reach unfathomable heights.",
+        "role": "Support Striker",
+        "difficulty": 3,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Range", "text": "Your Spell Attack's Range becomes 5." },
+            { "name": "Enchanter's Orb", "text": "At the start of your turn, take your orb back from all allies, then you may grant your orb to an ally within 5 spaces. An ally may only have one orb at a time. If that ally hits with an attack that deals dice of damage, the orb is consumed and grants an effect based on the damage die roll: 1-2, re-roll damage for this attack (you may use that result instead); 3-4, the next attack against the creature hit gains +1 die to hit; 5-6, the target of the attack gains a Bleed." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Enchanter's Orb", "text": "At the start of your turn, you may grant your orb to up to two allies within 5 spaces. When an orb would be consumed from an ally hitting with an attack, they may instead grant that orb to another ally within 5 spaces of them." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Enchanter's Orb", "text": "An attack that would benefit from your orb deals +1 die of damage." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Melt Armor", "text": "Choose an enemy within 5 spaces of you. Apply your Mark of Flame to that enemy, and for 2 rounds their Armor is reduced by 1. (Only applies once at a time)", "levelReq": 1 },
+          { "name": "Augury", "text": "Roll 5 six-sided dice, and note the results of each. For 2 rounds, when an ally hits with an attack that deals damage, after its damage is rolled you may allow them to replace their result with one of the noted results (or, if the attack dealt damage as d3s, half the result). If you do, remove that result from your noted results. When you cast this spell, remove any previous noted results from this spell.", "levelReq": 1 },
+          { "name": "Ley Weaving", "text": "Choose a space on the ground, marking it for the rest of the fight. An ally who starts their turn in the marked space is granted your orb for 1 round.", "levelReq": 5 },
+          { "name": "Hex of Unmaking", "text": "Choose an enemy within 5 spaces. For 3 rounds, each time they're hit by an attack they gain 1 Bleed.", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "spellblade",
+        "name": "Spellblade",
+        "tagline": "Wields their magic like a sword and shield, supporting their allies and cornering their enemies.",
+        "role": "Combat Controller",
+        "difficulty": 3,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Stats", "text": "Your Health increases by 2. Your Armor increases by 1 (to a base of 5). Your Mana is reduced by 3 (to a base of 3). Your Spell attack's Range is reduced by 2 (to a base of 1)." },
+            { "name": "Mark of the Spellblade", "text": "An enemy with your Mark of Flame cannot move in a direction that is away from you." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 2." },
+            { "name": "Mark of the Spellblade", "text": "When you or an ally hits a Marked enemy with an attack, they heal 1 Health." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 2." },
+            { "name": "Mark of the Spellblade", "text": "When a Marked enemy attacks you, after the attack, they gain a Bleed." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Runic Siphon", "text": "Choose an enemy within 3 spaces of you with at least one of your Marks of Flame on them, and convert any number of those Marks into Runic Marks (same as Marks of Flame, except they don't grant bonus damage dice to attackers). For each Mark converted, you regain 1 Mana. Then, make a Spell attack against that enemy. This Spell costs no Mana.", "levelReq": 1 },
+          { "name": "Disjunction", "text": "Make a Spell attack with a Range of 5. If it hits, the target is Pushed into an empty space next to you.", "levelReq": 1 },
+          { "name": "Aether Chains", "text": "Apply your Mark of Flame to all enemies within 3 spaces of you.", "levelReq": 5 },
+          { "name": "Squire's Ward", "text": "Choose an ally within 5 spaces of you, and ward them for 2 rounds. While warded, if an enemy attacks that ally, after the enemy's attack, you may make a Spell attack with Range 5 against them. (Only applies once at a time)", "levelReq": 8 }
+        ]
+      },
+      {
+        "id": "warlock",
+        "name": "Warlock",
+        "tagline": "Practices forbidden and dark arts to attain supreme magical power.",
+        "role": "Combat Striker",
+        "difficulty": 2,
+        "levels": [
+          { "level": 2, "abilities": [
+            { "name": "Blood Magic", "text": "Your Health increases by an amount equal to your maximum Mana, then your Mana becomes 0. If an effect would permanently increase your maximum Mana, it instead increases your Health by that much. Whenever you would spend Mana, instead you spend that much Health. When you make a Spell attack, before you roll any dice, you may spend 1 Health. If you do, and the attack hits, double the final amount of damage it would deal." }
+          ] },
+          { "level": 5, "abilities": [
+            { "name": "Blood Magic", "text": "Whenever you kill an enemy, heal 3 Health." }
+          ] },
+          { "level": 8, "abilities": [
+            { "name": "Health", "text": "Your Health increases by 5." }
+          ] }
+        ],
+        "trainingsAdded": [
+          { "name": "Sanguine Barbs", "text": "Make a Spell attack. If it hits, after all of the attack's effects happen, remove all of your Marks of Flame from the target. For each Mark removed this way, the target gains 2 Bleeds.", "levelReq": 1 },
+          { "name": "Shadowburn", "text": "Make a Spell attack. This Spell is a Bonus Action, costs an extra 2 Mana to cast (3 total), and can only be cast once per turn.", "levelReq": 1 },
+          { "name": "Master of Puppets", "text": "Make a Spell attack. If it kills the target, they are animated by you until the end of the turn. During this time, they take their turn as though they weren't dead, but you control them.", "levelReq": 5 },
+          { "name": "Grim Reaper", "text": "Make a Spell attack. If the attack hits, you gain 2 Health, or 3 Health if the attack was against an adjacent enemy.", "levelReq": 8 }
+        ]
+      }
+    ]
+  }
+]

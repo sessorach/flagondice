@@ -1,0 +1,7 @@
+[
+  { "name": "Athletics", "text": "Doing physically demanding tasks like balancing, running, climbing, and so on." },
+  { "name": "Sneak", "text": "Hiding from people, or doing something without people noticing." },
+  { "name": "Notice", "text": "Noticing hidden, secret, or just hard-to-notice things." },
+  { "name": "Convince", "text": "Persuading someone to believe you, scaring them to do what you say, and otherwise using words (and the threats/facts behind them) to change their behavior." },
+  { "name": "Expertise", "text": "Knowing useful information, and/or training in a niche skill that requires specific knowledge." }
+]

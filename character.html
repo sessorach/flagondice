@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flagon Dice — Character</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%23191410' stroke='%23c9752f' stroke-width='2'/%3E%3Ccircle cx='11' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='11' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #191410;
+      color: #e8d9c4;
+      min-height: 100vh;
+    }
+
+    button { font-family: inherit; cursor: pointer; }
+    button:hover { opacity: 0.85; }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+    input[type=text], input[type=number], textarea, select {
+      background: #1c150f; border: 0.5px solid #3a2f24; border-radius: 6px;
+      padding: 6px 10px; color: #e8d9c4; font-size: 14px; font-family: inherit; outline: none;
+      transition: border-color 0.15s; width: 100%;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #c9752f; }
+    input[type=checkbox] { accent-color: #c9752f; cursor: pointer; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a2f24; border-radius: 4px; }
+
+    /* Builder + sheet side by side, always both visible — no tab
+       switching between "edit" and "view" like FlagonQuest. */
+    .char-layout { display: block; }
+    @media (min-width: 1000px) {
+      .char-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 20px;
+        align-items: start;
+      }
+      .sheet-col { position: sticky; top: 78px; max-height: calc(100vh - 96px); overflow-y: auto; }
+    }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .field-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+    @media print {
+      @page { margin: 0.4in; }
+      .no-print { display: none !important; }
+      body { background: #fff !important; }
+      * { background: #fff !important; color: #111 !important; border-color: #000 !important; box-shadow: none !important; }
+      .sheet-col { position: static !important; max-height: none !important; overflow: visible !important; }
+      .sheet-box { border: 1px solid #000 !important; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const ACCENT = "#c9752f";
+const TEXT = { name: "#e8d9c4", body: "#cdb99e", label: "#c9752f", muted: "#a3907a", faint: "#6e5f4d" };
+const PANEL = "#221a13";
+const BORDER = "#3a2f24";
+const HEADFONT = "'Cinzel', Georgia, serif";
+const STORAGE_KEY = "flagondice-character";
+
+function trainingSlots(cls, level, hasSpec) {
+  const base = /Spells/.test(cls.trainingsLabel) ? 2 : 1;
+  let n = base;
+  if (level >= 2 && hasSpec) n += 1;
+  if (level >= 3) n += 1;
+  if (level >= 6) n += 1;
+  if (level >= 9) n += 1;
+  return n;
+}
+
+function emptyCharacter() {
+  return {
+    charName: "", charConcept: "",
+    backgroundId: "", skillChoice: "",
+    skills: { Athletics: 0, Sneak: 0, Notice: 0, Convince: 0, Expertise: 0 },
+    classId: "", specId: "", level: 1,
+    knownTrainings: [], heroBlessing: "",
+    hpMax: 0, hpCurrent: 0, manaMax: 0, manaCurrent: 0, armor: 0, speed: 0,
+    gold: 0, inventory: [], notes: "",
+  };
+}
+
+function loadCharacter() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyCharacter();
+    return { ...emptyCharacter(), ...JSON.parse(raw) };
+  } catch { return emptyCharacter(); }
+}
+
+function Field({ label, children }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: TEXT.faint }}>
+      {label}
+      {children}
+    </label>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div style={{ background: PANEL, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
+      <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 15, color: ACCENT, marginBottom: 12 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  const [classes, setClasses] = useState([]);
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [skillDefs, setSkillDefs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [char, setChar] = useState(loadCharacter);
+  const importRef = useRef();
+  const firstLoad = useRef(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("data/classes.json").then(r => r.json()),
+      fetch("data/backgrounds.json").then(r => r.json()),
+      fetch("data/skills.json").then(r => r.json()),
+    ]).then(([c, b, s]) => { setClasses(c); setBackgrounds(b); setSkillDefs(s); setLoading(false); });
+  }, []);
+
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; return; }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(char));
+  }, [char]);
+
+  const set = patch => setChar(c => ({ ...c, ...patch }));
+
+  const cls = classes.find(c => c.id === char.classId) || null;
+  const spec = cls ? cls.specializations.find(s => s.id === char.specId) : null;
+
+  // Switching class resets base stats + specialization + known trainings,
+  // since none of that carries over to a different class.
+  const chooseClass = id => {
+    const next = classes.find(c => c.id === id);
+    set({
+      classId: id, specId: "", knownTrainings: [],
+      hpMax: next ? next.stats.health : 0, hpCurrent: next ? next.stats.health : 0,
+      manaMax: next && next.stats.mana ? next.stats.mana : 0, manaCurrent: next && next.stats.mana ? next.stats.mana : 0,
+      armor: next ? next.stats.armor : 0, speed: next ? next.stats.speed : 0,
+    });
+  };
+
+  const trainingPool = cls ? [
+    ...cls.baseTrainings.map(t => ({ ...t, source: cls.trainingsLabel })),
+    ...(spec ? spec.trainingsAdded.map(t => ({ ...t, source: spec.name })) : []),
+  ] : [];
+  const available = trainingPool.filter(t => t.levelReq <= char.level);
+  const slots = cls ? trainingSlots(cls, char.level, !!char.specId) : 0;
+  const known = char.knownTrainings.filter(n => available.some(t => t.name === n));
+
+  const toggleTraining = name => {
+    const isKnown = char.knownTrainings.includes(name);
+    if (isKnown) set({ knownTrainings: char.knownTrainings.filter(n => n !== name) });
+    else if (known.length < slots) set({ knownTrainings: [...char.knownTrainings, name] });
+  };
+
+  const activeFeatures = [];
+  if (cls) {
+    activeFeatures.push({ name: cls.resourceAbility.name, text: cls.resourceAbility.text });
+    cls.levels.filter(l => l.level <= char.level && l.level !== 2).forEach(l => l.text.forEach(t => activeFeatures.push({ name: `Level ${l.level}`, text: t })));
+  }
+  if (spec) {
+    spec.levels.filter(l => l.level <= char.level).forEach(l => l.abilities.forEach(a => activeFeatures.push({ name: a.name, text: a.text })));
+  }
+
+  const background = backgrounds.find(b => b.id === char.backgroundId) || null;
+
+  const addItem = () => set({ inventory: [...char.inventory, { name: "", qty: 1 }] });
+  const updateItem = (i, patch) => set({ inventory: char.inventory.map((it, idx) => idx === i ? { ...it, ...patch } : it) });
+  const removeItem = i => set({ inventory: char.inventory.filter((_, idx) => idx !== i) });
+
+  const doExport = () => {
+    const blob = new Blob([JSON.stringify(char, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${char.charName || "flagon-dice-character"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const doImport = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    file.text().then(txt => {
+      try { setChar({ ...emptyCharacter(), ...JSON.parse(txt) }); }
+      catch { alert("That file doesn't look like a valid character export."); }
+    });
+    e.target.value = "";
+  };
+
+  const tabStyle = active => ({
+    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    background: active ? ACCENT : "transparent",
+    color: active ? "#191410" : TEXT.muted,
+    border: `0.5px solid ${active ? ACCENT : BORDER}`,
+    textDecoration: "none", display: "inline-flex", alignItems: "center",
+  });
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
+      Loading…
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="no-print" style={{
+        padding: "12px 20px", borderBottom: `0.5px solid ${BORDER}`,
+        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+        background: "#14100c", position: "sticky", top: 0, zIndex: 100,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8, background: "#191410",
+            border: `2px solid ${ACCENT}`, display: "grid", placeItems: "center",
+            fontFamily: HEADFONT, color: ACCENT, fontWeight: 700, fontSize: 15,
+          }}>⚅</div>
+          <div style={{ fontFamily: HEADFONT, fontSize: 20, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>
+            Flagon Dice
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
+          <a href="index.html" style={tabStyle(false)}>Compendium</a>
+          <a href="character.html" style={tabStyle(true)}>Character</a>
+          <div style={{ width: 1, height: 22, background: BORDER, margin: "0 4px" }} />
+          <button onClick={() => window.print()} style={{ ...tabStyle(false), border: `0.5px solid ${BORDER}`, background: "transparent" }}>Print</button>
+          <button onClick={doExport} style={{ ...tabStyle(false), border: `0.5px solid ${BORDER}`, background: "transparent" }}>Export</button>
+          <button onClick={() => importRef.current.click()} style={{ ...tabStyle(false), border: `0.5px solid ${BORDER}`, background: "transparent" }}>Import</button>
+          <input ref={importRef} type="file" accept="application/json" onChange={doImport} style={{ display: "none" }} />
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: 20 }}>
+        <div className="char-layout">
+
+          {/* ═══ BUILDER (left / top) ═══ */}
+          <div className="no-print">
+            <Section title="Concept">
+              <div className="field-grid" style={{ marginBottom: 10 }}>
+                <Field label="Name">
+                  <input type="text" value={char.charName} onChange={e => set({ charName: e.target.value })} />
+                </Field>
+                <Field label="Level">
+                  <input type="number" min="1" max="10" value={char.level} onChange={e => set({ level: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
+                </Field>
+              </div>
+              <Field label="Concept / backstory">
+                <textarea rows="2" value={char.charConcept} onChange={e => set({ charConcept: e.target.value })} />
+              </Field>
+            </Section>
+
+            <Section title="Background">
+              <Field label="Choose a Background">
+                <select value={char.backgroundId} onChange={e => set({ backgroundId: e.target.value })}>
+                  <option value="">— none —</option>
+                  {backgrounds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </Field>
+              {background && (
+                <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginTop: 10 }}>
+                  {background.description && <p style={{ marginBottom: 6 }}>{background.description}</p>}
+                  <p style={{ marginBottom: 6 }}><strong style={{ color: TEXT.name }}>Skills</strong>: {background.skills}</p>
+                  {background.features.map((f, i) => (
+                    <p key={i}><strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}</p>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            <Section title="Skills">
+              <div className="field-grid-3" style={{ rowGap: 12 }}>
+                {skillDefs.map(s => (
+                  <Field key={s.name} label={s.name}>
+                    <input type="number" min="0" value={char.skills[s.name] || 0}
+                      onChange={e => set({ skills: { ...char.skills, [s.name]: Math.max(0, Number(e.target.value) || 0) } })} />
+                  </Field>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Class">
+              <Field label="Choose a Class">
+                <select value={char.classId} onChange={e => chooseClass(e.target.value)}>
+                  <option value="">— none —</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+
+              {cls && (
+                <>
+                  {char.level >= 2 && (
+                    <div style={{ marginTop: 10 }}>
+                      <Field label="Specialization (level 2+)">
+                        <select value={char.specId} onChange={e => set({ specId: e.target.value })}>
+                          <option value="">— none —</option>
+                          {cls.specializations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 6 }}>
+                      {cls.trainingsLabel} known: {known.length} / {slots}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto", paddingRight: 4 }}>
+                      {available.map((t, i) => {
+                        const isKnown = char.knownTrainings.includes(t.name);
+                        const disabled = !isKnown && known.length >= slots;
+                        return (
+                          <label key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: disabled ? TEXT.faint : TEXT.body, alignItems: "flex-start" }}>
+                            <input type="checkbox" checked={isKnown} disabled={disabled} onChange={() => toggleTraining(t.name)} style={{ marginTop: 3, width: "auto" }} />
+                            <span><strong style={{ color: TEXT.name }}>{t.name}</strong> <span style={{ color: TEXT.faint, fontSize: 11 }}>({t.source})</span>: {t.text}</span>
+                          </label>
+                        );
+                      })}
+                      {available.length === 0 && <div style={{ fontSize: 13, color: TEXT.faint }}>Nothing available yet.</div>}
+                    </div>
+                  </div>
+
+                  {char.level >= 10 && (
+                    <div style={{ marginTop: 14 }}>
+                      <Field label="Hero's Blessing (level 10)">
+                        <select value={char.heroBlessing} onChange={e => set({ heroBlessing: e.target.value })}>
+                          <option value="">— choose —</option>
+                          <option value="Attacks deal +1 die of damage">Attacks deal +1 die of damage</option>
+                          <option value="Gain a point in a Skill of your choice">Gain a point in a Skill of your choice</option>
+                          <option value="Health increases by 3">Health increases by 3</option>
+                          {cls.stats.mana !== null && <option value="Mana increases by 3">Mana increases by 3</option>}
+                          <option value="Speed increases by 1">Speed increases by 1</option>
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+                </>
+              )}
+            </Section>
+
+            {cls && (
+              <Section title="Stats">
+                <div className="field-grid-4">
+                  <Field label="Armor">
+                    <input type="number" value={char.armor} onChange={e => set({ armor: Number(e.target.value) || 0 })} />
+                  </Field>
+                  <Field label="Speed">
+                    <input type="number" value={char.speed} onChange={e => set({ speed: Number(e.target.value) || 0 })} />
+                  </Field>
+                  <Field label="Health max">
+                    <input type="number" value={char.hpMax} onChange={e => set({ hpMax: Number(e.target.value) || 0 })} />
+                  </Field>
+                  {cls.stats.mana !== null && (
+                    <Field label="Mana max">
+                      <input type="number" value={char.manaMax} onChange={e => set({ manaMax: Number(e.target.value) || 0 })} />
+                    </Field>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 8, lineHeight: 1.6 }}>
+                  Base stats fill in from your class. Specializations and levels adjust these with plain-text rules (see the feature list on the sheet) — update the numbers above by hand as you apply them.
+                </div>
+              </Section>
+            )}
+
+            <Section title="Inventory & Gold">
+              <Field label="Gold">
+                <input type="number" min="0" style={{ maxWidth: 140 }} value={char.gold} onChange={e => set({ gold: Number(e.target.value) || 0 })} />
+              </Field>
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                {char.inventory.map((it, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6 }}>
+                    <input type="text" placeholder="Item name" value={it.name} onChange={e => updateItem(i, { name: e.target.value })} />
+                    <input type="number" min="0" style={{ maxWidth: 70 }} value={it.qty} onChange={e => updateItem(i, { qty: Number(e.target.value) || 0 })} />
+                    <button onClick={() => removeItem(i)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "0 10px" }}>✕</button>
+                  </div>
+                ))}
+                <button onClick={addItem} style={{ alignSelf: "flex-start", background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 12px", fontSize: 13 }}>+ Add item</button>
+              </div>
+            </Section>
+
+            <Section title="Notes">
+              <textarea rows="5" value={char.notes} onChange={e => set({ notes: e.target.value })} />
+            </Section>
+          </div>
+
+          {/* ═══ SHEET (right / bottom, and what prints) ═══ */}
+          <div className="sheet-col">
+            <div className="sheet-box" style={{ background: PANEL, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 16 }}>
+              <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 20, color: ACCENT }}>{char.charName || "Unnamed Adventurer"}</div>
+              <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 10 }}>
+                {cls ? cls.name : "No class"}{spec ? ` — ${spec.name}` : ""} · Level {char.level}
+                {background ? ` · ${background.name}` : ""}
+              </div>
+              {char.charConcept && <div style={{ fontSize: 12, color: TEXT.body, marginBottom: 10, lineHeight: 1.5 }}>{char.charConcept}</div>}
+
+              <div className="field-grid-4" style={{ marginBottom: 12 }}>
+                <div><div style={{ fontSize: 11, color: TEXT.faint }}>Armor</div><div style={{ fontSize: 16, color: TEXT.name }}>{char.armor}</div></div>
+                <div><div style={{ fontSize: 11, color: TEXT.faint }}>Speed</div><div style={{ fontSize: 16, color: TEXT.name }}>{char.speed}</div></div>
+                <div>
+                  <div style={{ fontSize: 11, color: TEXT.faint }}>Health</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input type="number" style={{ width: 46, padding: "2px 4px" }} value={char.hpCurrent} onChange={e => set({ hpCurrent: Number(e.target.value) || 0 })} />
+                    <span style={{ color: TEXT.faint }}>/ {char.hpMax}</span>
+                  </div>
+                </div>
+                {cls && cls.stats.mana !== null && (
+                  <div>
+                    <div style={{ fontSize: 11, color: TEXT.faint }}>Mana</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <input type="number" style={{ width: 46, padding: "2px 4px" }} value={char.manaCurrent} onChange={e => set({ manaCurrent: Number(e.target.value) || 0 })} />
+                      <span style={{ color: TEXT.faint }}>/ {char.manaMax}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {cls && cls.attacks.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Attacks</div>
+                  {cls.attacks.map((a, i) => (
+                    <div key={i} style={{ fontSize: 13, color: TEXT.body }}>{a.name}: {a.toHit} to hit, {a.damage} dmg, Range {a.range}</div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 14, marginBottom: 12, flexWrap: "wrap" }}>
+                {skillDefs.map(s => (char.skills[s.name] || 0) > 0 && (
+                  <div key={s.name} style={{ fontSize: 12, color: TEXT.body }}>{s.name} <strong style={{ color: TEXT.name }}>+{char.skills[s.name]}</strong></div>
+                ))}
+              </div>
+
+              {known.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                    {cls ? cls.trainingsLabel : "Trainings"}
+                  </div>
+                  {available.filter(t => known.includes(t.name)).map((t, i) => (
+                    <div key={i} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 4 }}>
+                      <strong style={{ color: TEXT.name }}>{t.name}</strong>: {t.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {char.heroBlessing && (
+                <div style={{ fontSize: 12, color: TEXT.body, marginBottom: 12 }}>
+                  <strong style={{ color: TEXT.name }}>Hero's Blessing</strong>: {char.heroBlessing}
+                </div>
+              )}
+
+              {activeFeatures.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Features</div>
+                  {activeFeatures.map((f, i) => (
+                    <div key={i} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 4 }}>
+                      <strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: TEXT.body, marginBottom: 12 }}>
+                <span>Gold: <strong style={{ color: TEXT.name }}>{char.gold}</strong></span>
+              </div>
+
+              {char.inventory.filter(it => it.name).length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Inventory</div>
+                  {char.inventory.filter(it => it.name).map((it, i) => (
+                    <div key={i} style={{ fontSize: 12, color: TEXT.body }}>{it.name} {it.qty > 1 ? `×${it.qty}` : ""}</div>
+                  ))}
+                </div>
+              )}
+
+              {char.notes && (
+                <div>
+                  <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Notes</div>
+                  <div style={{ fontSize: 12, color: TEXT.body, whiteSpace: "pre-wrap" }}>{char.notes}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
