@@ -107,7 +107,7 @@ function GlossaryTerm({ term, description }) {
           position: "absolute", left: 0, top: "100%", marginTop: 4, zIndex: 50,
           display: "block", width: 220,
           background: PANEL, border: `0.5px solid ${ACCENT}`, borderRadius: 6,
-          padding: "6px 10px", fontSize: 12, lineHeight: 1.4,
+          padding: "6px 10px", fontSize: 14, lineHeight: 1.4,
           color: TEXT.body, fontWeight: 400,
           fontFamily: "system-ui, -apple-system, sans-serif",
           boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
@@ -126,7 +126,7 @@ function Stars({ n }) {
 function StatPill({ label, value }) {
   if (value === null || value === undefined) return null;
   return (
-    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "6px 12px", fontSize: 13 }}>
+    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "6px 12px", fontSize: 15 }}>
       <span style={{ color: TEXT.faint }}>{label} </span>
       <strong style={{ color: TEXT.name }}>{value}</strong>
     </div>
@@ -153,14 +153,14 @@ function SectionHeading({ id, children, level }) {
 function TrainingList({ trainings, level, glossary, label }) {
   return (
     <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 15, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {trainings.map((t, i) => {
           const locked = level < t.levelReq;
           return (
-            <div key={i} style={{ fontSize: 14, lineHeight: 1.6, opacity: locked ? 0.45 : 1 }}>
+            <div key={i} style={{ fontSize: 16, lineHeight: 1.6, opacity: locked ? 0.45 : 1 }}>
               <strong style={{ color: TEXT.name }}>{t.name}</strong>
-              {t.levelReq > 1 && <span style={{ color: TEXT.faint, fontSize: 12 }}> (level {t.levelReq}+)</span>}
+              {t.levelReq > 1 && <span style={{ color: TEXT.faint, fontSize: 14 }}> (level {t.levelReq}+)</span>}
               <span style={{ color: TEXT.body }}>: {withGlossary(t.text, glossary)}</span>
             </div>
           );
@@ -174,14 +174,14 @@ function SpecCard({ spec, glossary }) {
   const [openLevel, setOpenLevel] = useState(2);
   return (
     <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 14 }}>
-      <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 16, color: TEXT.name }}>{spec.name}</div>
-      <div style={{ fontSize: 12, color: TEXT.faint, margin: "4px 0 8px" }}>{spec.role} · <Stars n={spec.difficulty} /></div>
-      <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginBottom: 10 }}>{spec.tagline}</div>
+      <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 18, color: TEXT.name }}>{spec.name}</div>
+      <div style={{ fontSize: 14, color: TEXT.faint, margin: "4px 0 8px" }}>{spec.role} · <Stars n={spec.difficulty} /></div>
+      <div style={{ fontSize: 15, color: TEXT.body, lineHeight: 1.6, marginBottom: 10 }}>{spec.tagline}</div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
         {spec.levels.map(l => (
           <button key={l.level} onClick={() => setOpenLevel(l.level)} style={{
-            fontSize: 12, padding: "4px 10px", borderRadius: 5,
+            fontSize: 14, padding: "4px 10px", borderRadius: 5,
             background: openLevel === l.level ? ACCENT : "transparent",
             color: openLevel === l.level ? "#191410" : TEXT.muted,
             border: `0.5px solid ${openLevel === l.level ? ACCENT : BORDER}`,
@@ -194,7 +194,7 @@ function SpecCard({ spec, glossary }) {
       {spec.levels.filter(l => l.level === openLevel).map(l => (
         <div key={l.level} style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
           {l.abilities.map((a, i) => (
-            <div key={i} style={{ fontSize: 13, lineHeight: 1.6 }}>
+            <div key={i} style={{ fontSize: 15, lineHeight: 1.6 }}>
               <strong style={{ color: TEXT.name }}>{a.name}</strong>
               <span style={{ color: TEXT.body }}>: {withGlossary(a.text, glossary)}</span>
             </div>
@@ -213,8 +213,8 @@ function ClassCard({ cls, glossary }) {
   return (
     <div style={{ marginBottom: 26 }}>
       <SectionHeading id={cls.id} level={2}>{cls.name}</SectionHeading>
-      <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 8 }}>{cls.role} · <Stars n={cls.difficulty} /></div>
-      <div style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>{cls.tagline}</div>
+      <div style={{ fontSize: 14, color: TEXT.faint, marginBottom: 8 }}>{cls.role} · <Stars n={cls.difficulty} /></div>
+      <div style={{ fontSize: 16, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>{cls.tagline}</div>
 
       <div className="stat-row" style={{ marginBottom: 14 }}>
         <StatPill label="Health" value={cls.stats.health} />
@@ -226,28 +226,28 @@ function ClassCard({ cls, glossary }) {
         ))}
       </div>
 
-      <div style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 6 }}>
+      <div style={{ fontSize: 16, lineHeight: 1.7, marginBottom: 6 }}>
         <strong style={{ color: TEXT.name }}>{cls.resourceAbility.name}</strong>
         <span style={{ color: TEXT.body }}>: {withGlossary(cls.resourceAbility.text, glossary)}</span>
       </div>
       {cls.trainingsIntro && (
-        <div style={{ fontSize: 13, color: TEXT.muted, lineHeight: 1.6, marginBottom: 6 }}>{cls.trainingsIntro}</div>
+        <div style={{ fontSize: 15, color: TEXT.muted, lineHeight: 1.6, marginBottom: 6 }}>{cls.trainingsIntro}</div>
       )}
 
       <TrainingList trainings={cls.baseTrainings} level={10} glossary={glossary} label={cls.trainingsLabel} />
 
       <div style={{ marginTop: 14 }}>
-        <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Level progression</div>
+        <div style={{ fontSize: 15, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Level progression</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {cls.levels.map(l => (
-            <div key={l.level} style={{ fontSize: 13, lineHeight: 1.6, color: TEXT.body }}>
+            <div key={l.level} style={{ fontSize: 15, lineHeight: 1.6, color: TEXT.body }}>
               <strong style={{ color: TEXT.name }}>Lv {l.level}.</strong> {l.text.join(" ")}
             </div>
           ))}
         </div>
       </div>
 
-      <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "16px 0 8px" }}>Specializations</div>
+      <div style={{ fontSize: 15, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "16px 0 8px" }}>Specializations</div>
       <div className="spec-grid">
         {cls.specializations.map(s => <SpecCard key={s.id} spec={s} glossary={glossary} />)}
       </div>
@@ -276,25 +276,25 @@ function App() {
   }, []);
 
   const tabStyle = () => ({
-    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    padding: "6px 14px", fontSize: 17, fontWeight: 500, borderRadius: 6,
     background: "transparent", color: TEXT.muted,
     border: `0.5px solid ${BORDER}`,
     textDecoration: "none", display: "inline-flex", alignItems: "center",
   });
   const bookLinkStyle = active => ({
-    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    padding: "6px 14px", fontSize: 17, fontWeight: 500, borderRadius: 6,
     background: active ? "#1a333b" : "#132227", color: BOOKLINK,
     border: `0.5px solid ${active ? BOOKLINK : "#2f5a67"}`,
     textDecoration: "none", display: "inline-flex", alignItems: "center",
   });
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 20 }}>
       Loading Flagon Dice…
     </div>
   );
   if (loadError) return (
-    <div style={{ minHeight: "100vh", padding: 40, color: "#e0785a", fontSize: 16, lineHeight: 1.6, maxWidth: 620 }}>
+    <div style={{ minHeight: "100vh", padding: 40, color: "#e0785a", fontSize: 18, lineHeight: 1.6, maxWidth: 620 }}>
       <strong>Couldn't load the compendium</strong>
       <p style={{ marginTop: 10, color: TEXT.muted }}>Error: {loadError}</p>
     </div>
@@ -315,8 +315,8 @@ function App() {
       }}>
         <div className="site-header-brand" style={{ textAlign: "center" }}>
           <a href="index.html" style={{ textDecoration: "none", color: "inherit" }}>
-            <div style={{ fontFamily: HEADFONT, fontSize: 22, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
-            <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
+            <div style={{ fontFamily: HEADFONT, fontSize: 24, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
+            <div style={{ fontSize: 14, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
           </a>
         </div>
         <div className="site-header-left" />
@@ -338,7 +338,7 @@ function App() {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: 20 }}>
         <div className="compendium-layout">
           <nav className="compendium-toc">
-            <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>Contents</div>
+            <div style={{ fontSize: 14, color: TEXT.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>Contents</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {toc.map(s => (
                 <a key={s.id} href={`#${s.id}`} style={{
@@ -360,7 +360,7 @@ function App() {
               <div key={s.id}>
                 <SectionHeading id={"r-" + s.id} level={2}>{s.title}</SectionHeading>
                 {s.body.split(/\n\n+/).map((p, i) => (
-                  <p key={i} style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 10 }}>
+                  <p key={i} style={{ fontSize: 16, color: TEXT.body, lineHeight: 1.7, marginBottom: 10 }}>
                     {withGlossary(p, reference)}
                   </p>
                 ))}
@@ -374,11 +374,11 @@ function App() {
             <div className="bg-grid">
               {backgrounds.map(b => (
                 <div key={b.id} style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 14 }}>
-                  <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 16, color: TEXT.name, marginBottom: 6 }}>{b.name}</div>
-                  {b.description && <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginBottom: 8 }}>{b.description}</div>}
-                  <div style={{ fontSize: 13, color: TEXT.body, marginBottom: 6 }}><strong style={{ color: TEXT.name }}>Skills</strong>: {b.skills}</div>
+                  <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 18, color: TEXT.name, marginBottom: 6 }}>{b.name}</div>
+                  {b.description && <div style={{ fontSize: 15, color: TEXT.body, lineHeight: 1.6, marginBottom: 8 }}>{b.description}</div>}
+                  <div style={{ fontSize: 15, color: TEXT.body, marginBottom: 6 }}><strong style={{ color: TEXT.name }}>Skills</strong>: {b.skills}</div>
                   {b.features.map((f, i) => (
-                    <div key={i} style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6 }}>
+                    <div key={i} style={{ fontSize: 15, color: TEXT.body, lineHeight: 1.6 }}>
                       <strong style={{ color: TEXT.name }}>{f.name}</strong>: {withGlossary(f.text, reference)}
                     </div>
                   ))}
@@ -389,7 +389,7 @@ function App() {
         </div>
       </div>
 
-      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 12, color: TEXT.faint }}>
+      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 14, color: TEXT.faint }}>
         Flagon Dice is a playtest project by Friendly Flagon Games. Questions to contact@flagonquest.com.
       </div>
     </div>

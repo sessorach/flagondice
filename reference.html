@@ -85,20 +85,20 @@ function App() {
   }, []);
 
   const tabStyle = () => ({
-    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    padding: "6px 14px", fontSize: 17, fontWeight: 500, borderRadius: 6,
     background: "transparent", color: TEXT.muted,
     border: `0.5px solid ${BORDER}`,
     textDecoration: "none", display: "inline-flex", alignItems: "center",
   });
   const bookLinkStyle = active => ({
-    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    padding: "6px 14px", fontSize: 17, fontWeight: 500, borderRadius: 6,
     background: active ? "#1a333b" : "#132227", color: BOOKLINK,
     border: `0.5px solid ${active ? BOOKLINK : "#2f5a67"}`,
     textDecoration: "none", display: "inline-flex", alignItems: "center",
   });
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 20 }}>
       Loading…
     </div>
   );
@@ -113,8 +113,8 @@ function App() {
       }}>
         <div className="site-header-brand" style={{ textAlign: "center" }}>
           <a href="index.html" style={{ textDecoration: "none", color: "inherit" }}>
-            <div style={{ fontFamily: HEADFONT, fontSize: 22, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
-            <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
+            <div style={{ fontFamily: HEADFONT, fontSize: 24, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
+            <div style={{ fontSize: 14, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
           </a>
         </div>
         <div className="site-header-left" />
@@ -135,10 +135,10 @@ function App() {
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
         <SectionHeading id="terms" level={1}>Reference</SectionHeading>
-        <p style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>Definitions for assorted status effects and terms used throughout the Compendium.</p>
+        <p style={{ fontSize: 16, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>Definitions for assorted status effects and terms used throughout the Compendium.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
           {reference.map((r, i) => (
-            <div key={i} style={{ fontSize: 14, lineHeight: 1.7 }}>
+            <div key={i} style={{ fontSize: 16, lineHeight: 1.7 }}>
               <strong style={{ color: TEXT.name }}>{r.term}</strong>
               <span style={{ color: TEXT.body }}>: {r.text}</span>
             </div>
@@ -146,17 +146,17 @@ function App() {
         </div>
 
         <SectionHeading id="items" level={1}>Item Index</SectionHeading>
-        <p style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 14 }}>
+        <p style={{ fontSize: 16, color: TEXT.body, lineHeight: 1.7, marginBottom: 14 }}>
           A quick-lookup copy of the full item text — to actually add items to a character, use the Items tab in the Builder.
           Items marked <strong style={{ color: ACCENT }}>(+)</strong> are masterwork.
         </p>
         {Object.entries(itemsByCategory).map(([cat, list]) => (
           <div key={cat} style={{ marginBottom: 20 }}>
             <SectionHeading id={"items-" + cat.replace(/\s+/g, "-").toLowerCase()} level={2}>{cat}</SectionHeading>
-            {list[0].categoryNote && <p style={{ fontSize: 13, color: TEXT.muted, marginBottom: 10 }}>{list[0].categoryNote}</p>}
+            {list[0].categoryNote && <p style={{ fontSize: 15, color: TEXT.muted, marginBottom: 10 }}>{list[0].categoryNote}</p>}
             <div className="item-grid">
               {list.map((it, i) => (
-                <div key={i} style={{ fontSize: 13, lineHeight: 1.6, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
+                <div key={i} style={{ fontSize: 15, lineHeight: 1.6, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
                   <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
                   <span style={{ color: TEXT.body }}>: {it.text}</span>
                 </div>
@@ -166,7 +166,7 @@ function App() {
         ))}
       </div>
 
-      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 12, color: TEXT.faint }}>
+      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 14, color: TEXT.faint }}>
         Flagon Dice is a playtest project by Friendly Flagon Games.
       </div>
     </div>
