@@ -84,7 +84,7 @@ const MAX_SKILL_PIPS = 5;
 const STAT_ONLY_NAMES = new Set(["Health", "Armor", "Speed", "Mana", "Range", "Armor & Health", "Stats", "Armor, Health & Mana"]);
 const STAT_ONLY_LINE = /^Your (Health|Armor|Speed|Mana) (increases|is (increased|reduced))\b/i;
 
-function computeStats(cls, spec, level, heroBlessing, bonusManaMax) {
+function computeStats(cls, spec, level, heroBlessing, bonusStats) {
   if (!cls) return { health: 0, armor: 0, speed: 0, mana: null };
   let health = cls.stats.health, armor = cls.stats.armor, speed = cls.stats.speed, mana = cls.stats.mana;
 
@@ -107,11 +107,17 @@ function computeStats(cls, spec, level, heroBlessing, bonusManaMax) {
     if (heroBlessing === "speed") speed += 1;
   }
 
-  // Permanent Mana bumps from learned bonus-training items (e.g. Tome of
-  // Mana Bolt) — only applies to classes that already have a Mana pool,
+  // Permanent bumps from statBonus grants (Background features, learned
+  // items like Tome of Mana Bolt — see gatherAllGrants/collectStatBonuses
+  // below). Mana only applies to classes that already have a Mana pool,
   // same restriction the item text itself uses ("can only be drunk by
   // characters with Mana" on the Flask of the Moon).
-  if (mana != null && bonusManaMax) mana += bonusManaMax;
+  if (bonusStats) {
+    if (mana != null && bonusStats.mana) mana += bonusStats.mana;
+    if (bonusStats.health) health += bonusStats.health;
+    if (bonusStats.armor) armor += bonusStats.armor;
+    if (bonusStats.speed) speed += bonusStats.speed;
+  }
 
   armor = Math.max(2, Math.min(6, armor));
   speed = Math.max(1, speed);
@@ -119,27 +125,52 @@ function computeStats(cls, spec, level, heroBlessing, bonusManaMax) {
 }
 
 // ── Bonus trainings/spells — a shared pool (data/bonus-trainings.json)
-// that isn't tied to any one class. A Background can grant free casts of
-// one per encounter; an item can permanently teach one for Mana instead.
-// Multiple sources granting the same one stack: free casts add up, and
-// the cheapest Mana cost among them applies.
-function collectBonusGrants(char, backgrounds, items) {
-  const grants = [];
+// that isn't tied to any one class. Each source (a Background, an item
+// once learned) contributes independent "grants":
+//   { type: "training",  trainingId, manaCost }  — you know it, castable
+//                                                   for that much Mana
+//   { type: "freeCasts", trainingId, amount }     — N free casts/encounter
+//                                                   of a training you have
+//   { type: "statBonus", stat, amount }            — flat permanent bump
+//                                                   to a core stat
+// Keeping these separate means a source can grant just a bonus use of a
+// spell someone else taught, or just a stat bonus with no spell at all —
+// e.g. Erehai grants the "training" AND a "freeCasts" of Mana Bolt as two
+// entries, and the Tome of Mana Bolt grants the "training" AND a
+// "statBonus" of +1 Mana as two entries, rather than one bundled object.
+function gatherAllGrants(char, backgrounds, items) {
+  const list = [];
   const bg = backgrounds.find(b => b.id === char.backgroundId);
-  if (bg && bg.bonusTrainingGrants) bg.bonusTrainingGrants.forEach(g => grants.push({ ...g, source: bg.name }));
-  (char.learnedBonusTrainings || []).forEach(entry => {
-    const item = items.find(it => it.bonusTrainingGrant && it.bonusTrainingGrant.trainingId === entry.trainingId);
-    if (item) grants.push({ ...item.bonusTrainingGrant, source: item.name });
+  if (bg && bg.grants) bg.grants.forEach(g => list.push({ ...g, source: bg.name }));
+  (char.learnedItems || []).forEach(entry => {
+    const item = items.find(it => it.name === entry.itemName);
+    if (item && item.grants) item.grants.forEach(g => list.push({ ...g, source: item.name }));
   });
+  return list;
+}
+
+// Aggregates training + freeCasts grants per trainingId: free casts add
+// up across sources, and the cheapest Mana cost among them applies.
+function collectBonusGrants(char, backgrounds, items) {
   const byTraining = {};
-  grants.forEach(g => {
+  gatherAllGrants(char, backgrounds, items).forEach(g => {
+    if (g.type !== "training" && g.type !== "freeCasts") return;
     const cur = byTraining[g.trainingId] || { trainingId: g.trainingId, freeCasts: 0, manaCost: null, sources: [] };
-    cur.freeCasts += g.freeCasts || 0;
-    if (g.manaCost != null) cur.manaCost = cur.manaCost == null ? g.manaCost : Math.min(cur.manaCost, g.manaCost);
+    if (g.type === "freeCasts") cur.freeCasts += g.amount || 0;
+    if (g.type === "training" && g.manaCost != null) cur.manaCost = cur.manaCost == null ? g.manaCost : Math.min(cur.manaCost, g.manaCost);
     cur.sources.push(g.source);
     byTraining[g.trainingId] = cur;
   });
   return Object.values(byTraining);
+}
+
+// Sums statBonus grants per stat (e.g. { mana: 1 }) — feeds computeStats.
+function collectStatBonuses(char, backgrounds, items) {
+  const totals = {};
+  gatherAllGrants(char, backgrounds, items).forEach(g => {
+    if (g.type === "statBonus") totals[g.stat] = (totals[g.stat] || 0) + (g.amount || 0);
+  });
+  return totals;
 }
 
 function trainingSlots(cls, level, hasSpec) {
@@ -200,14 +231,14 @@ function emptyCharacter() {
     hpCurrent: 0, manaCurrent: 0,
     gold: 0, inventory: [], customItems: [],
     charNotes: "", noteRows: [],
-    // Bonus spells/trainings learned permanently from items (e.g. Tome of
-    // Mana Bolt) — [{ trainingId, itemName, manaBonus }], the itemName/
-    // manaBonus kept alongside so the Builder's audit list can show what
-    // came from where and "Remove" can reverse the exact mana bonus it
-    // granted. See collectBonusGrants for how these combine with
-    // Background grants. bonusTrainingUses tracks free casts spent this
-    // encounter, keyed by trainingId.
-    learnedBonusTrainings: [], bonusManaMax: 0, bonusTrainingUses: {},
+    // Items permanently "Learned" from (e.g. Tome of Mana Bolt) —
+    // [{ id, itemName }]. What each one actually grants (training,
+    // freeCasts, statBonus) is read live from that item's own `grants`
+    // in items.json via gatherAllGrants, not duplicated here — so
+    // unlearning (removing an entry) always reverses exactly what that
+    // item currently grants. bonusTrainingUses tracks free casts spent
+    // this encounter, keyed by trainingId.
+    learnedItems: [], bonusTrainingUses: {},
   };
 }
 
@@ -447,14 +478,15 @@ function App() {
 
   const cls = classes.find(c => c.id === char.classId) || null;
   const spec = cls ? cls.specializations.find(s => s.id === char.specId) : null;
-  const stats = computeStats(cls, spec, char.level, char.heroBlessing, char.bonusManaMax);
+  const statBonuses = collectStatBonuses(char, backgrounds, items);
+  const stats = computeStats(cls, spec, char.level, char.heroBlessing, statBonuses);
   const skillBudget = skillPointBudget(char);
   const skillSpent = Object.values(char.skills).reduce((a, b) => a + b, 0);
   const bonusGrants = collectBonusGrants(char, backgrounds, items);
 
   const chooseClass = id => {
     const next = classes.find(c => c.id === id);
-    const nextStats = computeStats(next, null, char.level, char.heroBlessing, char.bonusManaMax);
+    const nextStats = computeStats(next, null, char.level, char.heroBlessing, statBonuses);
     set({
       classId: id, specId: "", knownTrainings: [],
       hpCurrent: nextStats.health, manaCurrent: nextStats.mana || 0,
@@ -548,39 +580,44 @@ function App() {
   const updateCustomItem = (id, patch) => set({ customItems: char.customItems.map(c => c.id === id ? { ...c, ...patch } : c) });
   const removeCustomItem = id => set({ customItems: char.customItems.filter(c => c.id !== id) });
 
-  // Consumes one copy of an item that permanently teaches a bonus
-  // training (e.g. Tome of Mana Bolt) — removes it from inventory, adds
-  // the training to the learned list (deduped by trainingId), and
-  // applies any permanent Mana bonus it carries.
-  const learnFromItem = item => {
-    if (!item.bonusTrainingGrant || (invMap[item.name] || 0) <= 0) return;
-    if (char.learnedBonusTrainings.some(e => e.trainingId === item.bonusTrainingGrant.trainingId)) return;
-    adjustInventory(item.name, -1);
-    set({
-      learnedBonusTrainings: [...char.learnedBonusTrainings, {
-        trainingId: item.bonusTrainingGrant.trainingId, itemName: item.name, manaBonus: item.manaBonus || 0,
-      }],
-      bonusManaMax: char.bonusManaMax + (item.manaBonus || 0),
-    });
+  // Does this item's "training" grant (if it has one) point at a
+  // trainingId the character already has access to, from ANY currently
+  // active source (Background or an already-learned item)? Blocks
+  // re-learning the same spell twice, matching "once learned, you don't
+  // get it a second time."
+  const alreadyGrantsSameTraining = item => {
+    const trainingGrant = (item.grants || []).find(g => g.type === "training");
+    if (!trainingGrant) return false;
+    return gatherAllGrants(char, backgrounds, items).some(g => g.type === "training" && g.trainingId === trainingGrant.trainingId);
   };
 
-  // Fully undoes a learned-from-item bonus training — for an accidental
-  // "Learn" click. Reverses exactly the Mana bonus that entry granted
-  // (not the whole pool), clamps current Mana down if it's now above the
-  // new max, and gives the consumed item back to inventory so the whole
-  // action is undone, not just its mechanical effect.
-  const unlearnBonusTraining = trainingId => {
-    const entry = char.learnedBonusTrainings.find(e => e.trainingId === trainingId);
+  // Consumes one copy of an item that permanently grants something (a
+  // bonus training, a stat bonus, or both — see items.json's `grants`)
+  // — removes it from inventory and records the learn so gatherAllGrants
+  // picks up everything that item currently grants.
+  const learnFromItem = item => {
+    if (!item.grants || (invMap[item.name] || 0) <= 0 || alreadyGrantsSameTraining(item)) return;
+    adjustInventory(item.name, -1);
+    set({ learnedItems: [...char.learnedItems, { id: makeUid(), itemName: item.name }] });
+  };
+
+  // Fully undoes one "Learn" action — for an accidental click. Reverses
+  // exactly what that item currently grants (recomputed live, so it's
+  // correct even if the item's data changes later), clamps current Mana
+  // down if it's now above the new max, and gives the consumed item back
+  // to inventory so the whole action is undone, not just its effects.
+  const unlearnItem = entryId => {
+    const entry = char.learnedItems.find(e => e.id === entryId);
     if (!entry) return;
-    const newBonusManaMax = char.bonusManaMax - entry.manaBonus;
-    const newStats = computeStats(cls, spec, char.level, char.heroBlessing, newBonusManaMax);
+    const nextLearnedItems = char.learnedItems.filter(e => e.id !== entryId);
+    const newStatBonuses = collectStatBonuses({ ...char, learnedItems: nextLearnedItems }, backgrounds, items);
+    const newStats = computeStats(cls, spec, char.level, char.heroBlessing, newStatBonuses);
     const alreadyCarried = char.inventory.find(e => e.name === entry.itemName);
     const nextInventory = alreadyCarried
       ? char.inventory.map(e => e.name === entry.itemName ? { ...e, qty: e.qty + 1 } : e)
       : [...char.inventory, { name: entry.itemName, qty: 1 }];
     set({
-      learnedBonusTrainings: char.learnedBonusTrainings.filter(e => e.trainingId !== trainingId),
-      bonusManaMax: newBonusManaMax,
+      learnedItems: nextLearnedItems,
       manaCurrent: newStats.mana !== null ? Math.min(char.manaCurrent, newStats.mana) : char.manaCurrent,
       inventory: nextInventory,
     });
@@ -629,7 +666,7 @@ function App() {
       charName: char.charName, backgroundId: char.backgroundId, backgroundSkillChoices: char.backgroundSkillChoices, skills: char.skills,
       classId: char.classId, specId: char.specId, level: char.level,
       knownTrainings: char.knownTrainings, heroBlessing: char.heroBlessing,
-      learnedBonusTrainings: char.learnedBonusTrainings, bonusManaMax: char.bonusManaMax,
+      learnedItems: char.learnedItems,
     });
     const url = window.location.href.split("#")[0] + "#char=" + encoded;
     const legacyCopy = () => {
@@ -761,17 +798,34 @@ function App() {
                   {background.features.map((f, i) => (
                     <p key={i}><strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}</p>
                   ))}
-                  {(background.bonusTrainingGrants || []).map((g, i) => {
-                    const t = bonusTrainings.find(bt => bt.id === g.trainingId);
-                    if (!t) return null;
-                    return (
-                      <p key={i}>
-                        <strong style={{ color: TEXT.name }}>{t.name}</strong>: {t.text}
-                        {" "}{g.freeCasts > 0 ? `Free to use ${g.freeCasts}× per encounter` : ""}
-                        {g.manaCost != null ? `${g.freeCasts > 0 ? ", after that" : "Can be cast"} for ${g.manaCost} Mana.` : "."}
-                      </p>
-                    );
-                  })}
+                  {(background.grants || []).filter(g => g.type === "statBonus").map((g, i) => (
+                    <p key={"sb" + i}><strong style={{ color: TEXT.name }}>+{g.amount} {g.stat[0].toUpperCase() + g.stat.slice(1)}</strong></p>
+                  ))}
+                  {(() => {
+                    // Aggregate just this Background's own training/freeCasts
+                    // grants — a scoped view, so the preview reflects only
+                    // what THIS source grants even if other sources (learned
+                    // items) also contribute to the same spell elsewhere.
+                    const byTraining = {};
+                    (background.grants || []).forEach(g => {
+                      if (g.type !== "training" && g.type !== "freeCasts") return;
+                      const cur = byTraining[g.trainingId] || { trainingId: g.trainingId, freeCasts: 0, manaCost: null };
+                      if (g.type === "freeCasts") cur.freeCasts += g.amount || 0;
+                      if (g.type === "training" && g.manaCost != null) cur.manaCost = cur.manaCost == null ? g.manaCost : Math.min(cur.manaCost, g.manaCost);
+                      byTraining[g.trainingId] = cur;
+                    });
+                    return Object.values(byTraining).map((g, i) => {
+                      const t = bonusTrainings.find(bt => bt.id === g.trainingId);
+                      if (!t) return null;
+                      return (
+                        <p key={i}>
+                          <strong style={{ color: TEXT.name }}>{t.name}</strong>: {t.text}
+                          {" "}{g.freeCasts > 0 ? `Free to use ${g.freeCasts}× per encounter` : ""}
+                          {g.manaCost != null ? `${g.freeCasts > 0 ? ", after that" : "Can be cast"} for ${g.manaCost} Mana.` : "."}
+                        </p>
+                      );
+                    });
+                  })()}
                 </div>
               )}
               {background && background.skillChoices.length > 0 && (
@@ -895,25 +949,37 @@ function App() {
 
             {/* Audit trail for anything permanently learned from a
                 consumable item (e.g. Tome of Mana Bolt) — lets a mistaken
-                "Learn" click on the Items tab be undone cleanly, since
-                unlearnBonusTraining reverses exactly the Mana bonus that
-                entry granted. */}
+                "Learn" click on the Items tab be undone cleanly. Each
+                entry's effects are read live from that item's `grants`,
+                so the list always matches what's actually being applied. */}
             <Section title="Permanent Item Bonuses">
-              {char.learnedBonusTrainings.length === 0 ? (
+              {char.learnedItems.length === 0 ? (
                 <div style={{ fontSize: 13, color: TEXT.faint }}>
-                  Nothing learned yet — items that permanently teach a bonus spell/training (like the Tome of Mana Bolt) show a "Learn" button on the Items tab once you're carrying one.
+                  Nothing learned yet — items that permanently grant something (like the Tome of Mana Bolt) show a "Learn" button on the Items tab once you're carrying one.
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {char.learnedBonusTrainings.map(entry => {
-                    const t = bonusTrainings.find(bt => bt.id === entry.trainingId);
+                  {char.learnedItems.map(entry => {
+                    const item = items.find(it => it.name === entry.itemName);
+                    const grantLines = (item && item.grants || []).map(g => {
+                      if (g.type === "training") {
+                        const t = bonusTrainings.find(bt => bt.id === g.trainingId);
+                        return t ? `teaches ${t.name}` : null;
+                      }
+                      if (g.type === "freeCasts") {
+                        const t = bonusTrainings.find(bt => bt.id === g.trainingId);
+                        return `+${g.amount} free cast${g.amount === 1 ? "" : "s"}/encounter of ${t ? t.name : g.trainingId}`;
+                      }
+                      if (g.type === "statBonus") return `+${g.amount} max ${g.stat[0].toUpperCase() + g.stat.slice(1)}`;
+                      return null;
+                    }).filter(Boolean);
                     return (
-                      <div key={entry.trainingId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, fontSize: 13 }}>
+                      <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, fontSize: 13 }}>
                         <span style={{ color: TEXT.body }}>
-                          <strong style={{ color: TEXT.name }}>{t ? t.name : entry.trainingId}</strong>
-                          <span style={{ color: TEXT.faint }}> — from {entry.itemName}{entry.manaBonus ? `, +${entry.manaBonus} max Mana` : ""}</span>
+                          <strong style={{ color: TEXT.name }}>{entry.itemName}</strong>
+                          <span style={{ color: TEXT.faint }}> — {grantLines.join(", ") || "no longer in the item data"}</span>
                         </span>
-                        <button onClick={() => unlearnBonusTraining(entry.trainingId)} title="Undo — reverses the Mana bonus and returns the item to Inventory" style={{ background: "transparent", border: "0.5px solid #c0392b", color: "#c0392b", borderRadius: 6, padding: "3px 10px", fontSize: 12, flexShrink: 0 }}>Remove</button>
+                        <button onClick={() => unlearnItem(entry.id)} title="Undo — reverses these effects and returns the item to Inventory" style={{ background: "transparent", border: "0.5px solid #c0392b", color: "#c0392b", borderRadius: 6, padding: "3px 10px", fontSize: 12, flexShrink: 0 }}>Remove</button>
                       </div>
                     );
                   })}
@@ -982,14 +1048,14 @@ function App() {
                             <button onClick={() => addToInventory(it.name)} style={{ background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}>
                               + Add{invMap[it.name] ? ` (${invMap[it.name]})` : ""}
                             </button>
-                            {it.bonusTrainingGrant && (
+                            {it.grants && (
                               <button
                                 onClick={() => learnFromItem(it)}
-                                disabled={(invMap[it.name] || 0) <= 0 || char.learnedBonusTrainings.some(e => e.trainingId === it.bonusTrainingGrant.trainingId)}
+                                disabled={(invMap[it.name] || 0) <= 0 || alreadyGrantsSameTraining(it)}
                                 title={(invMap[it.name] || 0) <= 0 ? "Add it to inventory first" : "Consume 1 to permanently learn this"}
                                 style={{ background: "transparent", border: `0.5px solid ${BOOKLINK}`, color: BOOKLINK, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}
                               >
-                                {char.learnedBonusTrainings.some(e => e.trainingId === it.bonusTrainingGrant.trainingId) ? "Learned" : "Learn"}
+                                {alreadyGrantsSameTraining(it) ? "Learned" : "Learn"}
                               </button>
                             )}
                           </div>

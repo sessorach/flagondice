@@ -20,8 +20,9 @@
       { "options": ["Convince", "Expertise"] }
     ],
     "features": [],
-    "bonusTrainingGrants": [
-      { "trainingId": "mana-bolt", "freeCasts": 1, "manaCost": 1 }
+    "grants": [
+      { "type": "training", "trainingId": "mana-bolt", "manaCost": 1 },
+      { "type": "freeCasts", "trainingId": "mana-bolt", "amount": 1 }
     ]
   },
   {

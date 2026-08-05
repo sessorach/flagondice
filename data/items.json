@@ -67,5 +67,8 @@
   { "category": "Equipment", "name": "Sundering Sledge", "masterwork": true, "text": "If you hit with an attack this round, the target's Armor is reduced by 1 for a round (doesn't stack on the same target)." },
   { "category": "Equipment", "name": "Zephyr Greaves", "masterwork": true, "text": "You gain +1 Speed this turn." },
 
-  { "category": "Permanent Consumes", "categoryNote": "Mysterious items that permanently grant a boon to the user, but can only be used once.", "name": "Tome of Mana Bolt", "masterwork": false, "text": "When you read the tome, it is consumed. Your maximum Mana is increased by 1, and you permanently learn the Mana Bolt spell. Mana Bolt is a Main Action to use, costs 1 Mana, and is an attack with Range 3, 2d6 to hit, and 2d6 damage.", "bonusTrainingGrant": { "trainingId": "mana-bolt", "freeCasts": 0, "manaCost": 1 }, "manaBonus": 1 }
+  { "category": "Permanent Consumes", "categoryNote": "Mysterious items that permanently grant a boon to the user, but can only be used once.", "name": "Tome of Mana Bolt", "masterwork": false, "text": "When you read the tome, it is consumed. Your maximum Mana is increased by 1, and you permanently learn the Mana Bolt spell. Mana Bolt is a Main Action to use, costs 1 Mana, and is an attack with Range 3, 2d6 to hit, and 2d6 damage.", "grants": [
+    { "type": "training", "trainingId": "mana-bolt", "manaCost": 1 },
+    { "type": "statBonus", "stat": "mana", "amount": 1 }
+  ] }
 ]
