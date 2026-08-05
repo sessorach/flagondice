@@ -814,13 +814,18 @@ function App() {
                     <div key={s.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                       <span style={{ fontSize: 14, color: TEXT.body }}>{s.name}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {/* Fixed-width slot so the badge appearing/not
+                            appearing never shifts the pips out of column
+                            with the rows above/below it. */}
+                        <span style={{ fontSize: 11, color: ACCENT, minWidth: 32, textAlign: "right" }}>
+                          {bgBonusMap[s.name] > 0 ? `+${bgBonusMap[s.name]} bg` : ""}
+                        </span>
                         <SkillPipsEditable
                           value={char.skills[s.name] || 0}
                           skillSpent={skillSpent}
                           skillBudget={skillBudget}
                           onChange={n => set({ skills: { ...char.skills, [s.name]: Math.max(0, n) } })}
                         />
-                        {bgBonusMap[s.name] > 0 && <span style={{ fontSize: 11, color: ACCENT }}>+{bgBonusMap[s.name]} bg</span>}
                         <span style={{ fontSize: 12, color: TEXT.faint, minWidth: 46, textAlign: "right" }}>Total {finalSkillValue(s.name)}</span>
                       </div>
                     </div>
