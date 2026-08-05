@@ -53,8 +53,6 @@
     .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .field-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .field-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .item-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-    @media (min-width: 700px) { .item-grid { grid-template-columns: repeat(2, 1fr); } }
 
     /* Pairs a compact block (Concept / the sheet's identity header) with
        the equally-compact Skills block, so Skills isn't a sparse
@@ -208,6 +206,15 @@ function skillPointBudget(char) {
   if (char.level >= 10 && char.heroBlessing === "skill") budget += 1;
   return budget;
 }
+
+// Items tab groups its filter checkboxes at this coarser level — Permanent
+// Consumes is folded into the Consumables group (still broken out as its
+// own labeled subcategory within it, just not a fourth checkbox).
+const ITEM_GROUPS = [
+  { name: "Consumables", categories: ["Consumables", "Permanent Consumes"] },
+  { name: "Charms", categories: ["Charms"] },
+  { name: "Equipment", categories: ["Equipment"] },
+];
 
 const HERO_BLESSINGS = [
   { id: "damage", label: "Attacks deal +1 die of damage" },
@@ -420,6 +427,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("build");
   const [itemSearch, setItemSearch] = useState("");
+  const [hiddenItemGroups, setHiddenItemGroups] = useState({});
   const [shareMsg, setShareMsg] = useState("");
   const importRef = useRef();
   const firstLoad = useRef(true);
@@ -1066,37 +1074,56 @@ function App() {
 
             <Section title="Item Compendium">
               <input type="text" placeholder="Search items…" value={itemSearch} onChange={e => setItemSearch(e.target.value)} style={{ marginBottom: 14 }} />
-              {Object.entries(itemsByCategory).map(([cat, list]) => {
-                const filtered = list.filter(itemMatches);
-                if (filtered.length === 0) return null;
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+                {ITEM_GROUPS.map(g => (
+                  <label key={g.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 15, color: TEXT.body, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={!hiddenItemGroups[g.name]}
+                      onChange={() => setHiddenItemGroups(h => ({ ...h, [g.name]: !h[g.name] }))}
+                      style={{ width: "auto" }}
+                    />
+                    {g.name}
+                  </label>
+                ))}
+              </div>
+              {ITEM_GROUPS.filter(g => !hiddenItemGroups[g.name]).map(g => {
+                const subcats = g.categories
+                  .map(cat => ({ cat, list: (itemsByCategory[cat] || []).filter(itemMatches) }))
+                  .filter(({ list }) => list.length > 0);
+                if (subcats.length === 0) return null;
                 return (
-                  <div key={cat} style={{ marginBottom: 18 }}>
-                    <div style={{ fontFamily: HEADFONT, fontSize: 17, color: TEXT.name, marginBottom: 8 }}>{cat}</div>
-                    <div className="item-grid">
-                      {filtered.map((it, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 15, lineHeight: 1.5, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
-                          <div>
-                            <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
-                            <span style={{ color: TEXT.body }}>: {it.text}</span>
-                          </div>
-                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                            <button onClick={() => addToInventory(it.name)} style={{ background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "2px 10px", fontSize: 14, height: 26 }}>
-                              + Add{invMap[it.name] ? ` (${invMap[it.name]})` : ""}
-                            </button>
-                            {it.grants && (
-                              <button
-                                onClick={() => learnFromItem(it)}
-                                disabled={(invMap[it.name] || 0) <= 0 || alreadyGrantsSameTraining(it)}
-                                title={(invMap[it.name] || 0) <= 0 ? "Add it to inventory first" : "Consume 1 to permanently learn this"}
-                                style={{ background: "transparent", border: `0.5px solid ${BOOKLINK}`, color: BOOKLINK, borderRadius: 6, padding: "2px 10px", fontSize: 14, height: 26 }}
-                              >
-                                {alreadyGrantsSameTraining(it) ? "Learned" : "Learn"}
-                              </button>
-                            )}
-                          </div>
+                  <div key={g.name} style={{ marginBottom: 22 }}>
+                    {subcats.map(({ cat, list }) => (
+                      <div key={cat} style={{ marginBottom: 18 }}>
+                        <div style={{ fontFamily: HEADFONT, fontSize: 17, color: TEXT.name, marginBottom: 8 }}>{cat}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {list.map((it, i) => (
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 15, lineHeight: 1.5, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
+                              <div>
+                                <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
+                                <span style={{ color: TEXT.body }}>: {it.text}</span>
+                              </div>
+                              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                <button onClick={() => addToInventory(it.name)} style={{ background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "2px 10px", fontSize: 14, height: 26 }}>
+                                  + Add{invMap[it.name] ? ` (${invMap[it.name]})` : ""}
+                                </button>
+                                {it.grants && (
+                                  <button
+                                    onClick={() => learnFromItem(it)}
+                                    disabled={(invMap[it.name] || 0) <= 0 || alreadyGrantsSameTraining(it)}
+                                    title={(invMap[it.name] || 0) <= 0 ? "Add it to inventory first" : "Consume 1 to permanently learn this"}
+                                    style={{ background: "transparent", border: `0.5px solid ${BOOKLINK}`, color: BOOKLINK, borderRadius: 6, padding: "2px 10px", fontSize: 14, height: 26 }}
+                                  >
+                                    {alreadyGrantsSameTraining(it) ? "Learned" : "Learn"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 );
               })}
