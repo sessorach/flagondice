@@ -23,9 +23,9 @@
     "levels": [
       { "level": 2, "text": ["Specialization — Choose one of the specializations below: Berserker, Monk, or Vanguard."] },
       { "level": 3, "text": ["Warrior's Training — You learn one Warrior's Training of your choice from any list available to you."] },
-      { "level": 4, "text": ["Your Health increases by 7.", "Adventurer's Knowledge — You gain a point of training in a Skill of your choice."] },
+      { "level": 4, "hpDelta": 7, "text": ["Your Health increases by 7.", "Adventurer's Knowledge — You gain a point of training in a Skill of your choice."] },
       { "level": 6, "text": ["Warrior's Training — You learn one Warrior's Training of your choice from any list available to you."] },
-      { "level": 7, "text": ["Your Health increases by 6.", "Adventurer's Knowledge — You gain a point of training in a Skill of your choice."] },
+      { "level": 7, "hpDelta": 6, "text": ["Your Health increases by 6.", "Adventurer's Knowledge — You gain a point of training in a Skill of your choice."] },
       { "level": 9, "text": ["Warrior's Training — You learn one Warrior's Training of your choice from any list available to you."] },
       { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Speed increases by 1."] }
     ],
@@ -47,6 +47,9 @@
           { "level": 8, "abilities": [
             { "name": "Bloodlust", "text": "At the start of your turn, after you take damage from any Bleeds you have, you may remove one Bleed from yourself (if you have any left)." }
           ] }
+        ],
+        "statMods": [
+          { "level": 2, "armor": -1 }
         ],
         "trainingsAdded": [
           { "name": "Blood Rush", "text": "You take 1 damage, and gain +1 Speed for a round. This can be used any number of times on your turn, and doesn't count against your limit of Trainings for the turn.", "levelReq": 1 },
@@ -72,6 +75,9 @@
           { "level": 8, "abilities": [
             { "name": "Ki Master", "text": "The first time on your turn that you hit an enemy with a Melee attack, their soul is marked for 1 round. When an ally hits the marked enemy with an attack, you gain 1 Ki point." }
           ] }
+        ],
+        "statMods": [
+          { "level": 2, "speed": 1 }
         ],
         "trainingsAdded": [
           { "name": "Meditation", "text": "You gain 2 Ki points.", "levelReq": 1 },
@@ -99,6 +105,11 @@
             { "name": "Health", "text": "Your Health increases by 1." },
             { "name": "Shield Wall", "text": "When an ally next to you is hit with an attack that would deal damage, you may reduce that damage by half (rounded down) and take the difference yourself." }
           ] }
+        ],
+        "statMods": [
+          { "level": 2, "health": 2 },
+          { "level": 5, "health": 1 },
+          { "level": 8, "health": 1 }
         ],
         "trainingsAdded": [
           { "name": "Castle", "text": "Choose an ally within 2 spaces of you, move into their space, then move them into either the space you started in or one you moved through.", "levelReq": 1 },
@@ -134,9 +145,9 @@
     "levels": [
       { "level": 2, "text": ["Specialization — Choose one of the specializations below: Assassin, Bard, or Ranger."] },
       { "level": 3, "text": ["Rogue's Training — You learn one Rogue's Training of your choice from any list available to you."] },
-      { "level": 4, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 4, "hpDelta": 5, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
       { "level": 6, "text": ["Rogue's Training — You learn one Rogue's Training of your choice from any list available to you."] },
-      { "level": 7, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 7, "hpDelta": 4, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
       { "level": 9, "text": ["Rogue's Training — You learn one Rogue's Training of your choice from any list available to you."] },
       { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Speed increases by 1."] }
     ],
@@ -158,6 +169,7 @@
             { "name": "Assassinate", "text": "Melee Attacks you make while Flanking deal +1 die of damage." }
           ] }
         ],
+        "statMods": [],
         "trainingsAdded": [
           { "name": "Expose Armor", "text": "This turn, the next Melee Attack you make against an enemy you're Flanking treats the target as though their Armor were 1 lower.", "levelReq": 1 },
           { "name": "Shadowstep", "text": "Shift to an empty space next to an enemy within 2 spaces of you. Then, if you are Flanking them, your Armor is increased by 1 against their attacks until your next turn.", "levelReq": 1 },
@@ -185,6 +197,11 @@
             { "name": "Blunder", "text": "At the start of combat, you gain 3 Blunder dice." }
           ] }
         ],
+        "statMods": [
+          { "level": 2, "armor": -1, "health": 2 },
+          { "level": 5, "health": 1 },
+          { "level": 8, "health": 1 }
+        ],
         "trainingsAdded": [
           { "name": "Song of Mockery", "text": "You may either gain 1 Blunder die or re-roll 2 of your Blunder dice.", "levelReq": 1 },
           { "name": "Song of Vigor", "text": "You or an ally within 3 spaces heals 1 Health. You may spend a Blunder die, and if you do instead pick a number of targets up to the die's value.", "levelReq": 1 },
@@ -211,6 +228,7 @@
             { "name": "Trick Shot", "text": "Your Ranged attack gains +1 die to hit." }
           ] }
         ],
+        "statMods": [],
         "trainingsAdded": [
           { "name": "Aimed Shot", "text": "The next Ranged attack you make this turn gains +1 die to hit.", "levelReq": 1 },
           { "name": "Net Trap", "text": "Choose 3 spaces, in a straight line, all within 5 spaces of you; those spaces are filled with a net wall for the rest of the fight. The wall occupies those spaces and nobody can move into or through it, but everyone can see through it and ranged attacks can go through it. The wall has 2 Armor and 1 Health, and once its Health runs out the entire wall is removed.", "levelReq": 1 },
@@ -247,9 +265,9 @@
     "levels": [
       { "level": 2, "text": ["Specialization — Choose one of the specializations below: Apostle, Druid, or Paladin."] },
       { "level": 3, "text": ["Priest Spells — You learn one Priest Spell of your choice from any list available to you."] },
-      { "level": 4, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 4, "hpDelta": 5, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
       { "level": 6, "text": ["Priest Spells — You learn one Priest Spell of your choice from any list available to you."] },
-      { "level": 7, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 7, "hpDelta": 5, "text": ["Your Health increases by 5.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
       { "level": 9, "text": ["Priest Spells — You learn one Priest Spell of your choice from any list available to you."] },
       { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Mana increases by 3; your Speed increases by 1."] }
     ],
@@ -271,6 +289,9 @@
           { "level": 8, "abilities": [
             { "name": "Martyrdom", "text": "The first time each fight you are Downed, all allies within 5 spaces of you heal 1d3 Health." }
           ] }
+        ],
+        "statMods": [
+          { "level": 2, "mana": 1 }
         ],
         "trainingsAdded": [
           { "name": "Mark of Mending", "text": "You place up to two blessings, which may be on yourself and/or adjacent allies. The blessings last for 3 rounds, and if a blessed creature loses any Health, the blessing ends and they heal 1d3 Health. (Only applies once at a time)", "levelReq": 1 },
@@ -296,6 +317,7 @@
             { "name": "Shapeshifting", "text": "While in an animal form, your Melee attack gains +1 die to hit." }
           ] }
         ],
+        "statMods": [],
         "trainingsAdded": [
           { "name": "Beast Venom", "text": "If your next Melee attack this turn hits, the target gains 2 Bleeds. This Spell is a Bonus Action.", "levelReq": 1 },
           { "name": "Faerie Fire", "text": "An enemy within 3 spaces has their Armor reduced by 1 for 1 round. This Spell is a Bonus Action. (Only applies once at a time)", "levelReq": 1 },
@@ -322,6 +344,11 @@
             { "name": "Health", "text": "Your Health increases by 2." },
             { "name": "Judgment", "text": "The attack from this ability happens before the enemy's attack instead, and if it hits then their attack and any others they make this turn instead target you." }
           ] }
+        ],
+        "statMods": [
+          { "level": 2, "armor": 1, "health": 2, "mana": -4 },
+          { "level": 5, "health": 2 },
+          { "level": 8, "health": 2 }
         ],
         "trainingsAdded": [
           { "name": "Reckoning", "text": "Make a Melee attack. If it hits, and you end your turn next to the target, they're Immobilized for 1 round.", "levelReq": 1 },
@@ -359,9 +386,9 @@
     "levels": [
       { "level": 2, "text": ["Specialization — Choose one of the specializations below: Enchanter, Spellblade, or Warlock."] },
       { "level": 3, "text": ["Mage Casting — You learn one Mage Spell of your choice from any list available to you."] },
-      { "level": 4, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 4, "hpDelta": 4, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
       { "level": 6, "text": ["Mage Casting — You learn one Mage Spell of your choice from any list available to you."] },
-      { "level": 7, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
+      { "level": 7, "hpDelta": 4, "text": ["Your Health increases by 4.", "Adventurer's Knowledge — You gain a point in a Skill of your choice."] },
       { "level": 9, "text": ["Mage Casting — You learn one Mage Spell of your choice from any list available to you."] },
       { "level": 10, "text": ["Hero's Blessing — Choose one: your attacks deal +1 die of damage; gain a point in a Skill of your choice; your Health increases by 3; your Mana increases by 3; your Speed increases by 1."] }
     ],
@@ -384,6 +411,7 @@
             { "name": "Enchanter's Orb", "text": "An attack that would benefit from your orb deals +1 die of damage." }
           ] }
         ],
+        "statMods": [],
         "trainingsAdded": [
           { "name": "Melt Armor", "text": "Choose an enemy within 5 spaces of you. Apply your Mark of Flame to that enemy, and for 2 rounds their Armor is reduced by 1. (Only applies once at a time)", "levelReq": 1 },
           { "name": "Augury", "text": "Roll 5 six-sided dice, and note the results of each. For 2 rounds, when an ally hits with an attack that deals damage, after its damage is rolled you may allow them to replace their result with one of the noted results (or, if the attack dealt damage as d3s, half the result). If you do, remove that result from your noted results. When you cast this spell, remove any previous noted results from this spell.", "levelReq": 1 },
@@ -411,6 +439,11 @@
             { "name": "Mark of the Spellblade", "text": "When a Marked enemy attacks you, after the attack, they gain a Bleed." }
           ] }
         ],
+        "statMods": [
+          { "level": 2, "health": 2, "armor": 1, "mana": -3 },
+          { "level": 5, "health": 2 },
+          { "level": 8, "health": 2 }
+        ],
         "trainingsAdded": [
           { "name": "Runic Siphon", "text": "Choose an enemy within 3 spaces of you with at least one of your Marks of Flame on them, and convert any number of those Marks into Runic Marks (same as Marks of Flame, except they don't grant bonus damage dice to attackers). For each Mark converted, you regain 1 Mana. Then, make a Spell attack against that enemy. This Spell costs no Mana.", "levelReq": 1 },
           { "name": "Disjunction", "text": "Make a Spell attack with a Range of 5. If it hits, the target is Pushed into an empty space next to you.", "levelReq": 1 },
@@ -434,6 +467,10 @@
           { "level": 8, "abilities": [
             { "name": "Health", "text": "Your Health increases by 5." }
           ] }
+        ],
+        "manaToHealthAtLevel2": true,
+        "statMods": [
+          { "level": 8, "health": 5 }
         ],
         "trainingsAdded": [
           { "name": "Sanguine Barbs", "text": "Make a Spell attack. If it hits, after all of the attack's effects happen, remove all of your Marks of Flame from the target. For each Mark removed this way, the target gains 2 Bleeds.", "levelReq": 1 },

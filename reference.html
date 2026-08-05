@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flagon Dice — Reference</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%23191410' stroke='%23c9752f' stroke-width='2'/%3E%3Ccircle cx='11' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='11' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #191410;
+      color: #e8d9c4;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; }
+    button { font-family: inherit; cursor: pointer; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a2f24; border-radius: 4px; }
+
+    .site-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    @media (min-width: 900px) {
+      .site-header { display: grid; grid-template-columns: 1fr auto 1fr; }
+      .site-header-left  { order: 1; justify-self: start; }
+      .site-header-brand { order: 2; justify-self: center; }
+      .site-header-nav   { order: 3; justify-self: end; }
+    }
+
+    .item-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 700px) { .item-grid { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const ACCENT = "#c9752f";
+const BOOKLINK = "#7fb1c9";
+const TEXT = { name: "#e8d9c4", body: "#cdb99e", label: "#c9752f", muted: "#a3907a", faint: "#6e5f4d" };
+const PANEL = "#221a13";
+const BORDER = "#3a2f24";
+const HEADFONT = "'Cinzel', Georgia, serif";
+
+function SectionHeading({ id, children, level }) {
+  return (
+    <div id={id} style={{
+      fontFamily: HEADFONT, fontWeight: 700,
+      fontSize: level === 1 ? 26 : 19,
+      color: level === 1 ? ACCENT : TEXT.name,
+      marginTop: level === 1 ? 30 : 18,
+      marginBottom: 12,
+      paddingTop: level === 1 ? 14 : 0,
+      borderTop: level === 1 ? `0.5px solid ${BORDER}` : "none",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  const [reference, setReference] = useState([]);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("data/reference.json").then(r => r.json()),
+      fetch("data/items.json").then(r => r.json()),
+    ]).then(([ref, it]) => { setReference(ref); setItems(it); setLoading(false); });
+  }, []);
+
+  const tabStyle = () => ({
+    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    background: "transparent", color: TEXT.muted,
+    border: `0.5px solid ${BORDER}`,
+    textDecoration: "none", display: "inline-flex", alignItems: "center",
+  });
+  const bookLinkStyle = active => ({
+    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    background: active ? "#1a333b" : "#132227", color: BOOKLINK,
+    border: `0.5px solid ${active ? BOOKLINK : "#2f5a67"}`,
+    textDecoration: "none", display: "inline-flex", alignItems: "center",
+  });
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
+      Loading…
+    </div>
+  );
+
+  const itemsByCategory = items.reduce((acc, it) => { (acc[it.category] = acc[it.category] || []).push(it); return acc; }, {});
+
+  return (
+    <div>
+      <div className="site-header" style={{
+        padding: "12px 20px", borderBottom: `0.5px solid ${BORDER}`,
+        background: "#14100c", position: "sticky", top: 0, zIndex: 100,
+      }}>
+        <div className="site-header-brand" style={{ textAlign: "center" }}>
+          <a href="index.html" style={{ textDecoration: "none", color: "inherit" }}>
+            <div style={{ fontFamily: HEADFONT, fontSize: 22, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
+            <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
+          </a>
+        </div>
+        <div className="site-header-left" />
+        <div className="site-header-nav" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <a href="index.html" style={tabStyle()}>Builder</a>
+          <a href="index.html" style={tabStyle()}>Items</a>
+          <a href="index.html" style={tabStyle()}>Character sheet</a>
+          <a href="index.html" style={tabStyle()}>Notes</a>
+
+          <div style={{ width: 40, display: "flex", justifyContent: "center", alignItems: "center", flexShrink: 0 }} aria-hidden="true">
+            <div style={{ width: 1, height: 22, background: BORDER }} />
+          </div>
+
+          <a href="compendium.html" target="_blank" rel="noopener noreferrer" style={bookLinkStyle(false)}>Compendium</a>
+          <a href="reference.html" style={bookLinkStyle(true)}>Reference</a>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
+        <SectionHeading id="terms" level={1}>Reference</SectionHeading>
+        <p style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>Definitions for assorted status effects and terms used throughout the Compendium.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+          {reference.map((r, i) => (
+            <div key={i} style={{ fontSize: 14, lineHeight: 1.7 }}>
+              <strong style={{ color: TEXT.name }}>{r.term}</strong>
+              <span style={{ color: TEXT.body }}>: {r.text}</span>
+            </div>
+          ))}
+        </div>
+
+        <SectionHeading id="items" level={1}>Item Index</SectionHeading>
+        <p style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 14 }}>
+          A quick-lookup copy of the full item text — to actually add items to a character, use the Items tab in the Builder.
+          Items marked <strong style={{ color: ACCENT }}>(+)</strong> are masterwork.
+        </p>
+        {Object.entries(itemsByCategory).map(([cat, list]) => (
+          <div key={cat} style={{ marginBottom: 20 }}>
+            <SectionHeading id={"items-" + cat.replace(/\s+/g, "-").toLowerCase()} level={2}>{cat}</SectionHeading>
+            {list[0].categoryNote && <p style={{ fontSize: 13, color: TEXT.muted, marginBottom: 10 }}>{list[0].categoryNote}</p>}
+            <div className="item-grid">
+              {list.map((it, i) => (
+                <div key={i} style={{ fontSize: 13, lineHeight: 1.6, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
+                  <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
+                  <span style={{ color: TEXT.body }}>: {it.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 12, color: TEXT.faint }}>
+        Flagon Dice is a playtest project by Friendly Flagon Games.
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>

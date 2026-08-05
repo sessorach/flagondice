@@ -6,7 +6,6 @@
   <title>Flagon Dice</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%23191410' stroke='%23c9752f' stroke-width='2'/%3E%3Ccircle cx='11' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='11' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3C/svg%3E">
 
-  <!-- Cinzel — fantasy display font for headings, distinct from FlagonQuest's MedievalSharp -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
@@ -25,434 +24,644 @@
       min-height: 100vh;
     }
 
-    a { color: inherit; }
     button { font-family: inherit; cursor: pointer; }
     button:hover { opacity: 0.85; }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+    input[type=text], input[type=number], textarea, select {
+      background: #1c150f; border: 0.5px solid #3a2f24; border-radius: 6px;
+      padding: 6px 10px; color: #e8d9c4; font-size: 14px; font-family: inherit; outline: none;
+      transition: border-color 0.15s; width: 100%;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #c9752f; }
+    input[type=checkbox] { accent-color: #c9752f; cursor: pointer; }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #3a2f24; border-radius: 4px; }
 
-    /* Single scrolling document with a sticky table-of-contents rail —
-       everything (rules, classes, backgrounds, items, reference) lives
-       on this one page instead of being split into filtered tabs. */
-    .compendium-layout { display: block; }
-    .compendium-toc { margin-bottom: 24px; }
+    .site-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
     @media (min-width: 900px) {
-      .compendium-layout {
-        display: grid;
-        grid-template-columns: 220px minmax(0, 1fr);
-        gap: 28px;
-        align-items: start;
-      }
-      .compendium-toc {
-        position: sticky;
-        top: 78px;
-        max-height: calc(100vh - 96px);
-        overflow-y: auto;
-        margin-bottom: 0;
-      }
+      .site-header { display: grid; grid-template-columns: 1fr auto 1fr; }
+      .site-header-left  { order: 1; justify-self: start; }
+      .site-header-brand { order: 2; justify-self: center; }
+      .site-header-nav   { order: 3; justify-self: end; }
     }
 
-    .stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
-    .spec-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-    @media (min-width: 760px) { .spec-grid { grid-template-columns: repeat(3, 1fr); } }
-
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .field-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
     .item-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
     @media (min-width: 700px) { .item-grid { grid-template-columns: repeat(2, 1fr); } }
 
-    .bg-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
-    @media (min-width: 700px) { .bg-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media print {
+      @page { margin: 0.4in; }
+      .no-print { display: none !important; }
+      body { background: #fff !important; }
+      * { background: #fff !important; color: #111 !important; border-color: #000 !important; box-shadow: none !important; }
+      .sheet-box { border: 1px solid #000 !important; }
+    }
   </style>
 </head>
 <body>
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 const ACCENT = "#c9752f";
-const TEXT = {
-  name:  "#e8d9c4",
-  body:  "#cdb99e",
-  label: "#c9752f",
-  muted: "#a3907a",
-  faint: "#6e5f4d",
-};
+const BOOKLINK = "#7fb1c9";
+const TEXT = { name: "#e8d9c4", body: "#cdb99e", label: "#c9752f", muted: "#a3907a", faint: "#6e5f4d" };
 const PANEL = "#221a13";
 const BORDER = "#3a2f24";
 const HEADFONT = "'Cinzel', Georgia, serif";
+const STORAGE_KEY = "flagondice-character";
 
-// ── Glossary tooltip — reference.json terms auto-linked wherever they
-// appear in ability/training/item text, so players don't have to hunt
-// down what "Bleed" or "Shift" means mid-read.
-function withGlossary(text, glossary) {
-  if (!text || !glossary || glossary.length === 0) return text;
-  const terms = [...glossary].sort((a, b) => b.term.length - a.term.length);
-  const escaped = terms.map(g => g.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const re = new RegExp(`\\b(${escaped.join("|")})s?\\b`, "g");
-  const byTerm = Object.fromEntries(glossary.map(g => [g.term, g.text]));
-  const parts = text.split(re);
-  if (parts.length === 1) return text;
-  return parts.map((part, i) => {
-    const key = part && byTerm[part.replace(/s$/, "")] ? part.replace(/s$/, "") : null;
-    return key ? <GlossaryTerm key={i} term={part} description={byTerm[key]} /> : part;
-  });
+// ── Stat math — level-ups and specializations apply automatically here;
+// current Health/Mana are tracked separately (see the Character Sheet
+// tab's damage/heal controls) so the computed max never gets clobbered
+// by hand-entered numbers.
+function computeStats(cls, spec, level, heroBlessing) {
+  if (!cls) return { health: 0, armor: 0, speed: 0, mana: null };
+  let health = cls.stats.health, armor = cls.stats.armor, speed = cls.stats.speed, mana = cls.stats.mana;
+
+  cls.levels.forEach(l => { if (level >= l.level && l.hpDelta) health += l.hpDelta; });
+
+  if (spec && level >= 2) {
+    if (spec.manaToHealthAtLevel2) { health += (mana || 0); mana = 0; }
+    (spec.statMods || []).forEach(m => {
+      if (level < m.level) return;
+      if (m.health) health += m.health;
+      if (m.armor) armor += m.armor;
+      if (m.speed) speed += m.speed;
+      if (m.mana != null && mana != null) mana += m.mana;
+    });
+  }
+
+  if (level >= 10) {
+    if (heroBlessing === "health") health += 3;
+    if (heroBlessing === "mana" && mana != null) mana += 3;
+    if (heroBlessing === "speed") speed += 1;
+  }
+
+  armor = Math.max(2, Math.min(6, armor));
+  speed = Math.max(1, speed);
+  return { health, armor, speed, mana };
 }
 
-function GlossaryTerm({ term, description }) {
-  const [open, setOpen] = useState(false);
+function trainingSlots(cls, level, hasSpec) {
+  const base = /Spells/.test(cls.trainingsLabel) ? 2 : 1;
+  let n = base;
+  if (level >= 2 && hasSpec) n += 1;
+  if (level >= 3) n += 1;
+  if (level >= 6) n += 1;
+  if (level >= 9) n += 1;
+  return n;
+}
+
+const HERO_BLESSINGS = [
+  { id: "damage", label: "Attacks deal +1 die of damage" },
+  { id: "skill", label: "Gain a point in a Skill of your choice" },
+  { id: "health", label: "Health increases by 3" },
+  { id: "mana", label: "Mana increases by 3", manaOnly: true },
+  { id: "speed", label: "Speed increases by 1" },
+];
+
+function emptyCharacter() {
+  return {
+    charName: "", charConcept: "",
+    backgroundId: "",
+    skills: { Athletics: 0, Sneak: 0, Notice: 0, Convince: 0, Expertise: 0 },
+    classId: "", specId: "", level: 1,
+    knownTrainings: [], heroBlessing: "",
+    hpCurrent: 0, manaCurrent: 0,
+    gold: 0, inventory: [], customItems: [],
+    charNotes: "", noteRows: [],
+  };
+}
+
+function loadCharacter() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyCharacter();
+    return { ...emptyCharacter(), ...JSON.parse(raw) };
+  } catch { return emptyCharacter(); }
+}
+
+function makeUid() { return Math.random().toString(36).slice(2, 10); }
+
+function Field({ label, children }) {
   return (
-    <span
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-      style={{ position: "relative", borderBottom: `1px dotted ${ACCENT}`, cursor: "help" }}
-    >
-      {term}
-      {open && (
-        <span style={{
-          position: "absolute", left: 0, top: "100%", marginTop: 4, zIndex: 50,
-          display: "block", width: 220,
-          background: PANEL, border: `0.5px solid ${ACCENT}`, borderRadius: 6,
-          padding: "6px 10px", fontSize: 12, lineHeight: 1.4,
-          color: TEXT.body, fontWeight: 400,
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
-        }}>
-          <strong style={{ color: ACCENT }}>{term}</strong>: {description}
-        </span>
-      )}
-    </span>
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: TEXT.faint }}>
+      {label}
+      {children}
+    </label>
   );
 }
 
-function Stars({ n }) {
+function Section({ title, children }) {
   return (
-    <span style={{ color: ACCENT, letterSpacing: 1 }}>
-      {"★".repeat(n)}{"☆".repeat(3 - n)}
-    </span>
-  );
-}
-
-function StatPill({ label, value }) {
-  if (value === null || value === undefined) return null;
-  return (
-    <div style={{
-      background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6,
-      padding: "6px 12px", fontSize: 13,
-    }}>
-      <span style={{ color: TEXT.faint }}>{label} </span>
-      <strong style={{ color: TEXT.name }}>{value}</strong>
-    </div>
-  );
-}
-
-function SectionHeading({ id, children, level }) {
-  return (
-    <div id={id} style={{
-      fontFamily: HEADFONT, fontWeight: 700,
-      fontSize: level === 1 ? 26 : 19,
-      color: level === 1 ? ACCENT : TEXT.name,
-      marginTop: level === 1 ? 30 : 18,
-      marginBottom: 12,
-      paddingTop: level === 1 ? 14 : 0,
-      borderTop: level === 1 ? `0.5px solid ${BORDER}` : "none",
-      scrollMarginTop: 90,
-    }}>
+    <div style={{ background: PANEL, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
+      <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 15, color: ACCENT, marginBottom: 12 }}>{title}</div>
       {children}
     </div>
   );
 }
 
-function TrainingList({ trainings, level, glossary, label }) {
+function StatChip({ label, value }) {
+  if (value === null || value === undefined) return null;
   return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-        {label}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {trainings.map((t, i) => {
-          const locked = level < t.levelReq;
-          return (
-            <div key={i} style={{ fontSize: 14, lineHeight: 1.6, opacity: locked ? 0.45 : 1 }}>
-              <strong style={{ color: TEXT.name }}>{t.name}</strong>
-              {t.levelReq > 1 && <span style={{ color: TEXT.faint, fontSize: 12 }}> (level {t.levelReq}+)</span>}
-              <span style={{ color: TEXT.body }}>: {withGlossary(t.text, glossary)}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function SpecCard({ spec, glossary }) {
-  const [openLevel, setOpenLevel] = useState(2);
-  return (
-    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 14 }}>
-      <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 16, color: TEXT.name }}>{spec.name}</div>
-      <div style={{ fontSize: 12, color: TEXT.faint, margin: "4px 0 8px" }}>{spec.role} · <Stars n={spec.difficulty} /></div>
-      <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginBottom: 10 }}>{spec.tagline}</div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        {spec.levels.map(l => (
-          <button key={l.level} onClick={() => setOpenLevel(l.level)} style={{
-            fontSize: 12, padding: "4px 10px", borderRadius: 5,
-            background: openLevel === l.level ? ACCENT : "transparent",
-            color: openLevel === l.level ? "#191410" : TEXT.muted,
-            border: `0.5px solid ${openLevel === l.level ? ACCENT : BORDER}`,
-          }}>
-            Level {l.level}
-          </button>
-        ))}
-      </div>
-
-      {spec.levels.filter(l => l.level === openLevel).map(l => (
-        <div key={l.level} style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-          {l.abilities.map((a, i) => (
-            <div key={i} style={{ fontSize: 13, lineHeight: 1.6 }}>
-              <strong style={{ color: TEXT.name }}>{a.name}</strong>
-              <span style={{ color: TEXT.body }}>: {withGlossary(a.text, glossary)}</span>
-            </div>
-          ))}
-        </div>
-      ))}
-
-      <TrainingList trainings={spec.trainingsAdded} level={10} glossary={glossary} label="Adds to the training/spell list" />
-    </div>
-  );
-}
-
-function ClassCard({ cls, glossary }) {
-  return (
-    <div style={{ marginBottom: 26 }}>
-      <SectionHeading id={cls.id} level={2}>{cls.name}</SectionHeading>
-      <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 8 }}>{cls.role} · <Stars n={cls.difficulty} /></div>
-      <div style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>{cls.tagline}</div>
-
-      <div className="stat-row" style={{ marginBottom: 14 }}>
-        <StatPill label="Health" value={cls.stats.health} />
-        <StatPill label="Armor" value={cls.stats.armor} />
-        <StatPill label="Speed" value={cls.stats.speed} />
-        <StatPill label="Mana" value={cls.stats.mana} />
-        {cls.attacks.map((a, i) => (
-          <StatPill key={i} label={a.name} value={`${a.toHit} to hit, ${a.damage} dmg, Range ${a.range}`} />
-        ))}
-      </div>
-
-      <div style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 6 }}>
-        <strong style={{ color: TEXT.name }}>{cls.resourceAbility.name}</strong>
-        <span style={{ color: TEXT.body }}>: {withGlossary(cls.resourceAbility.text, glossary)}</span>
-      </div>
-      {cls.trainingsIntro && (
-        <div style={{ fontSize: 13, color: TEXT.muted, lineHeight: 1.6, marginBottom: 6 }}>{cls.trainingsIntro}</div>
-      )}
-
-      <TrainingList trainings={cls.baseTrainings} level={10} glossary={glossary} label={cls.trainingsLabel} />
-
-      <div style={{ marginTop: 14 }}>
-        <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-          Level progression
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {cls.levels.map(l => (
-            <div key={l.level} style={{ fontSize: 13, lineHeight: 1.6, color: TEXT.body }}>
-              <strong style={{ color: TEXT.name }}>Lv {l.level}.</strong> {l.text.join(" ")}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "16px 0 8px" }}>
-        Specializations
-      </div>
-      <div className="spec-grid">
-        {cls.specializations.map(s => <SpecCard key={s.id} spec={s} glossary={glossary} />)}
-      </div>
+    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "8px 4px", textAlign: "center" }}>
+      <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 18, color: TEXT.name, fontWeight: 600 }}>{value}</div>
     </div>
   );
 }
 
 function App() {
-  const [rules, setRules] = useState([]);
   const [classes, setClasses] = useState([]);
   const [backgrounds, setBackgrounds] = useState([]);
+  const [skillDefs, setSkillDefs] = useState([]);
   const [items, setItems] = useState([]);
-  const [reference, setReference] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
+  const [char, setChar] = useState(loadCharacter);
+  const [view, setView] = useState("build");
+  const [itemSearch, setItemSearch] = useState("");
+  const [hpAdjust, setHpAdjust] = useState(1);
+  const [manaAdjust, setManaAdjust] = useState(1);
+  const importRef = useRef();
+  const firstLoad = useRef(true);
 
   useEffect(() => {
     Promise.all([
-      fetch("data/rules.json").then(r => r.json()),
       fetch("data/classes.json").then(r => r.json()),
       fetch("data/backgrounds.json").then(r => r.json()),
+      fetch("data/skills.json").then(r => r.json()),
       fetch("data/items.json").then(r => r.json()),
-      fetch("data/reference.json").then(r => r.json()),
-    ]).then(([r, c, b, i, ref]) => {
-      setRules(r); setClasses(c); setBackgrounds(b); setItems(i); setReference(ref);
-      setLoading(false);
-    }).catch(err => { setLoadError(err.message); setLoading(false); });
+    ]).then(([c, b, s, it]) => { setClasses(c); setBackgrounds(b); setSkillDefs(s); setItems(it); setLoading(false); });
   }, []);
 
-  const tabStyle = active => ({
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; return; }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(char));
+  }, [char]);
+
+  const set = patch => setChar(c => ({ ...c, ...patch }));
+
+  const cls = classes.find(c => c.id === char.classId) || null;
+  const spec = cls ? cls.specializations.find(s => s.id === char.specId) : null;
+  const stats = computeStats(cls, spec, char.level, char.heroBlessing);
+
+  // Current Health/Mana ride along with the computed max — clamp down if
+  // a level-down or respec drops the max below where current already sat.
+  useEffect(() => {
+    if (!cls) return;
+    set({
+      hpCurrent: Math.min(char.hpCurrent || stats.health, stats.health) || stats.health,
+    });
+    // eslint-disable-next-line
+  }, [cls && cls.id]);
+
+  const chooseClass = id => {
+    const next = classes.find(c => c.id === id);
+    const nextStats = computeStats(next, null, char.level, char.heroBlessing);
+    set({
+      classId: id, specId: "", knownTrainings: [],
+      hpCurrent: nextStats.health, manaCurrent: nextStats.mana || 0,
+    });
+  };
+
+  const trainingPool = cls ? [
+    ...cls.baseTrainings.map(t => ({ ...t, source: cls.trainingsLabel })),
+    ...(spec ? spec.trainingsAdded.map(t => ({ ...t, source: spec.name })) : []),
+  ] : [];
+  const available = trainingPool.filter(t => t.levelReq <= char.level);
+  const slots = cls ? trainingSlots(cls, char.level, !!char.specId) : 0;
+  const known = char.knownTrainings.filter(n => available.some(t => t.name === n));
+
+  const toggleTraining = name => {
+    const isKnown = char.knownTrainings.includes(name);
+    if (isKnown) set({ knownTrainings: char.knownTrainings.filter(n => n !== name) });
+    else if (known.length < slots) set({ knownTrainings: [...char.knownTrainings, name] });
+  };
+
+  const activeFeatures = [];
+  if (cls) {
+    activeFeatures.push({ name: cls.resourceAbility.name, text: cls.resourceAbility.text });
+    cls.levels.filter(l => l.level <= char.level && l.level !== 2 && l.level !== 10).forEach(l => l.text.forEach(t => activeFeatures.push({ name: `Level ${l.level}`, text: t })));
+  }
+  if (spec) {
+    spec.levels.filter(l => l.level <= char.level).forEach(l => l.abilities.forEach(a => activeFeatures.push({ name: a.name, text: a.text })));
+  }
+
+  const background = backgrounds.find(b => b.id === char.backgroundId) || null;
+
+  // ── Items tab helpers ──
+  const itemsByCategory = items.reduce((acc, it) => { (acc[it.category] = acc[it.category] || []).push(it); return acc; }, {});
+  const invMap = char.inventory.reduce((acc, e) => { acc[e.name] = e.qty; return acc; }, {});
+  const addToInventory = name => {
+    const found = char.inventory.find(e => e.name === name);
+    if (found) set({ inventory: char.inventory.map(e => e.name === name ? { ...e, qty: e.qty + 1 } : e) });
+    else set({ inventory: [...char.inventory, { name, qty: 1 }] });
+  };
+  const adjustInventory = (name, delta) => {
+    set({
+      inventory: char.inventory
+        .map(e => e.name === name ? { ...e, qty: e.qty + delta } : e)
+        .filter(e => e.qty > 0),
+    });
+  };
+  const addCustomItem = () => set({ customItems: [...char.customItems, { id: makeUid(), name: "", text: "", qty: 1 }] });
+  const updateCustomItem = (id, patch) => set({ customItems: char.customItems.map(c => c.id === id ? { ...c, ...patch } : c) });
+  const removeCustomItem = id => set({ customItems: char.customItems.filter(c => c.id !== id) });
+
+  // ── Notes tab helpers ──
+  const addNoteRow = () => set({ noteRows: [...char.noteRows, { id: makeUid(), text: "" }] });
+  const updateNoteRow = (id, text) => set({ noteRows: char.noteRows.map(r => r.id === id ? { ...r, text } : r) });
+  const removeNoteRow = id => set({ noteRows: char.noteRows.filter(r => r.id !== id) });
+
+  // ── HP / Mana quick adjust — the "different method" for tracking current
+  // values separately from the auto-computed max, lives on the sheet.
+  const applyHp = delta => set({ hpCurrent: Math.max(0, Math.min(stats.health, char.hpCurrent + delta)) });
+  const applyMana = delta => set({ manaCurrent: Math.max(0, Math.min(stats.mana || 0, char.manaCurrent + delta)) });
+
+  const doExport = () => {
+    const blob = new Blob([JSON.stringify(char, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${char.charName || "flagon-dice-character"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const doImport = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    file.text().then(txt => {
+      try { setChar({ ...emptyCharacter(), ...JSON.parse(txt) }); }
+      catch { alert("That file doesn't look like a valid character export."); }
+    });
+    e.target.value = "";
+  };
+
+  const tabStyle = key => ({
     padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
-    background: active ? ACCENT : "transparent",
-    color: active ? "#191410" : TEXT.muted,
-    border: `0.5px solid ${active ? ACCENT : BORDER}`,
+    background: view === key ? ACCENT : "transparent",
+    color: view === key ? "#191410" : TEXT.muted,
+    border: `0.5px solid ${view === key ? ACCENT : BORDER}`,
     textDecoration: "none", display: "inline-flex", alignItems: "center",
   });
+  const bookLinkStyle = {
+    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    background: "#132227", color: BOOKLINK,
+    border: `0.5px solid #2f5a67`,
+    textDecoration: "none", display: "inline-flex", alignItems: "center",
+  };
 
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
-      Loading Flagon Dice…
-    </div>
-  );
-  if (loadError) return (
-    <div style={{ minHeight: "100vh", padding: 40, color: "#e0785a", fontSize: 16, lineHeight: 1.6, maxWidth: 620 }}>
-      <strong>Couldn't load the compendium</strong>
-      <p style={{ marginTop: 10, color: TEXT.muted }}>Error: {loadError}</p>
+      Loading…
     </div>
   );
 
-  const itemsByCategory = items.reduce((acc, it) => {
-    (acc[it.category] = acc[it.category] || []).push(it);
-    return acc;
-  }, {});
-
-  const toc = [
-    { id: "rules", title: "Rules", level: 1 },
-    { id: "classes", title: "Classes", level: 1 },
-    ...classes.map(c => ({ id: c.id, title: c.name, level: 2 })),
-    { id: "backgrounds", title: "Backgrounds", level: 1 },
-    { id: "items", title: "Items", level: 1 },
-    { id: "reference", title: "Reference", level: 1 },
-  ];
+  const itemMatches = it => !itemSearch || it.name.toLowerCase().includes(itemSearch.toLowerCase()) || it.text.toLowerCase().includes(itemSearch.toLowerCase());
 
   return (
     <div>
-      {/* ═══ HEADER ═══ */}
-      <div style={{
+      <div className="no-print site-header" style={{
         padding: "12px 20px", borderBottom: `0.5px solid ${BORDER}`,
-        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
         background: "#14100c", position: "sticky", top: 0, zIndex: 100,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 8, background: "#191410",
-            border: `2px solid ${ACCENT}`, display: "grid", placeItems: "center",
-            fontFamily: HEADFONT, color: ACCENT, fontWeight: 700, fontSize: 15,
-          }}>⚅</div>
-          <div>
-            <div style={{ fontFamily: HEADFONT, fontSize: 20, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>
-              Flagon Dice
-            </div>
-            <div style={{ fontSize: 12, color: TEXT.faint }}>Roll one die, keep it, get on with it</div>
-          </div>
+        <div className="site-header-brand" style={{ textAlign: "center" }}>
+          <div style={{ fontFamily: HEADFONT, fontSize: 22, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
+          <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
-          <a href="index.html" style={tabStyle(true)}>Compendium</a>
-          <a href="character.html" style={tabStyle(false)}>Character</a>
+
+        <div className="site-header-left" />
+
+        <div className="site-header-nav" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <button onClick={() => setView("build")} style={tabStyle("build")}>Builder</button>
+          <button onClick={() => setView("items")} style={tabStyle("items")}>Items</button>
+          <button onClick={() => setView("sheet")} style={tabStyle("sheet")}>Character sheet</button>
+          <button onClick={() => setView("notes")} style={tabStyle("notes")}>Notes</button>
+
+          <div style={{ width: 40, display: "flex", justifyContent: "center", alignItems: "center", flexShrink: 0 }} aria-hidden="true">
+            <div style={{ width: 1, height: 22, background: BORDER }} />
+          </div>
+
+          <a href="compendium.html" target="_blank" rel="noopener noreferrer" style={bookLinkStyle}>Compendium</a>
+          <a href="reference.html" target="_blank" rel="noopener noreferrer" style={bookLinkStyle}>Reference</a>
         </div>
       </div>
 
-      {/* ═══ BODY ═══ */}
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 20 }}>
-        <div className="compendium-layout">
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
 
-          <nav className="compendium-toc">
-            <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-              Contents
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {toc.map(s => (
-                <a key={s.id} href={`#${s.id}`} style={{
-                  fontSize: s.level >= 2 ? 13 : 14,
-                  fontWeight: s.level >= 2 ? 400 : 600,
-                  color: s.level >= 2 ? TEXT.muted : TEXT.body,
-                  paddingLeft: s.level >= 2 ? 14 : 0,
-                  textDecoration: "none", lineHeight: 1.9,
-                }}>
-                  {s.title}
-                </a>
-              ))}
-            </div>
-          </nav>
+        {/* ═══ BUILDER ═══ */}
+        {view === "build" && (
+          <>
+            <Section title="Concept">
+              <div className="field-grid" style={{ marginBottom: 10 }}>
+                <Field label="Name">
+                  <input type="text" value={char.charName} onChange={e => set({ charName: e.target.value })} />
+                </Field>
+                <Field label="Level">
+                  <input type="number" min="1" max="10" value={char.level} onChange={e => set({ level: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
+                </Field>
+              </div>
+              <Field label="Concept / backstory">
+                <textarea rows="2" value={char.charConcept} onChange={e => set({ charConcept: e.target.value })} />
+              </Field>
+            </Section>
 
-          <div>
-            {/* Rules */}
-            <SectionHeading id="rules" level={1}>Rules</SectionHeading>
-            {rules.map(s => (
-              <div key={s.id}>
-                <SectionHeading id={"r-" + s.id} level={s.level === 1 ? 2 : 2}>{s.title}</SectionHeading>
-                {s.body.split(/\n\n+/).map((p, i) => (
-                  <p key={i} style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 10 }}>
-                    {withGlossary(p, reference)}
-                  </p>
+            <Section title="Background">
+              <Field label="Choose a Background">
+                <select value={char.backgroundId} onChange={e => set({ backgroundId: e.target.value })}>
+                  <option value="">— none —</option>
+                  {backgrounds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </Field>
+              {background && (
+                <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginTop: 10 }}>
+                  {background.description && <p style={{ marginBottom: 6 }}>{background.description}</p>}
+                  <p style={{ marginBottom: 6 }}><strong style={{ color: TEXT.name }}>Skills</strong>: {background.skills}</p>
+                  {background.features.map((f, i) => (
+                    <p key={i}><strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}</p>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            <Section title="Skills">
+              <div className="field-grid-3" style={{ rowGap: 12 }}>
+                {skillDefs.map(s => (
+                  <Field key={s.name} label={s.name}>
+                    <input type="number" min="0" value={char.skills[s.name] || 0}
+                      onChange={e => set({ skills: { ...char.skills, [s.name]: Math.max(0, Number(e.target.value) || 0) } })} />
+                  </Field>
                 ))}
               </div>
-            ))}
+            </Section>
 
-            {/* Classes */}
-            <SectionHeading id="classes" level={1}>Classes</SectionHeading>
-            {classes.map(c => <ClassCard key={c.id} cls={c} glossary={reference} />)}
+            <Section title="Class">
+              <Field label="Choose a Class">
+                <select value={char.classId} onChange={e => chooseClass(e.target.value)}>
+                  <option value="">— none —</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
 
-            {/* Backgrounds */}
-            <SectionHeading id="backgrounds" level={1}>Backgrounds</SectionHeading>
-            <div className="bg-grid">
-              {backgrounds.map(b => (
-                <div key={b.id} style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 14 }}>
-                  <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 16, color: TEXT.name, marginBottom: 6 }}>{b.name}</div>
-                  {b.description && <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginBottom: 8 }}>{b.description}</div>}
-                  <div style={{ fontSize: 13, color: TEXT.body, marginBottom: 6 }}><strong style={{ color: TEXT.name }}>Skills</strong>: {b.skills}</div>
-                  {b.features.map((f, i) => (
-                    <div key={i} style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6 }}>
-                      <strong style={{ color: TEXT.name }}>{f.name}</strong>: {withGlossary(f.text, reference)}
+              {cls && (
+                <>
+                  <div className="field-grid-4" style={{ marginTop: 14 }}>
+                    <StatChip label="Health" value={stats.health} />
+                    <StatChip label="Armor" value={stats.armor} />
+                    <StatChip label="Speed" value={stats.speed} />
+                    <StatChip label="Mana" value={stats.mana} />
+                  </div>
+                  <div style={{ fontSize: 11, color: TEXT.faint, marginTop: 6 }}>
+                    Computed automatically from your class, specialization, and level. Current Health/Mana are tracked on the Character sheet tab.
+                  </div>
+
+                  {char.level >= 2 && (
+                    <div style={{ marginTop: 14 }}>
+                      <Field label="Specialization (level 2+)">
+                        <select value={char.specId} onChange={e => set({ specId: e.target.value })}>
+                          <option value="">— none —</option>
+                          {cls.specializations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </Field>
                     </div>
-                  ))}
-                </div>
-              ))}
+                  )}
+
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 6 }}>
+                      {cls.trainingsLabel} known: {known.length} / {slots}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto", paddingRight: 4 }}>
+                      {available.map((t, i) => {
+                        const isKnown = char.knownTrainings.includes(t.name);
+                        const disabled = !isKnown && known.length >= slots;
+                        return (
+                          <label key={i} style={{ display: "flex", gap: 8, fontSize: 13, color: disabled ? TEXT.faint : TEXT.body, alignItems: "flex-start" }}>
+                            <input type="checkbox" checked={isKnown} disabled={disabled} onChange={() => toggleTraining(t.name)} style={{ marginTop: 3, width: "auto" }} />
+                            <span><strong style={{ color: TEXT.name }}>{t.name}</strong> <span style={{ color: TEXT.faint, fontSize: 11 }}>({t.source})</span>: {t.text}</span>
+                          </label>
+                        );
+                      })}
+                      {available.length === 0 && <div style={{ fontSize: 13, color: TEXT.faint }}>Nothing available yet.</div>}
+                    </div>
+                  </div>
+
+                  {char.level >= 10 && (
+                    <div style={{ marginTop: 14 }}>
+                      <Field label="Hero's Blessing (level 10)">
+                        <select value={char.heroBlessing} onChange={e => set({ heroBlessing: e.target.value })}>
+                          <option value="">— choose —</option>
+                          {HERO_BLESSINGS.filter(h => !h.manaOnly || cls.stats.mana !== null).map(h => (
+                            <option key={h.id} value={h.id}>{h.label}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+                </>
+              )}
+            </Section>
+
+            <div className="no-print" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={doExport} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 13 }}>Export</button>
+              <button onClick={() => importRef.current.click()} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 13 }}>Import</button>
+              <input ref={importRef} type="file" accept="application/json" onChange={doImport} style={{ display: "none" }} />
             </div>
+          </>
+        )}
 
-            {/* Items */}
-            <SectionHeading id="items" level={1}>Items</SectionHeading>
-            <p style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 14 }}>
-              Items you may find during your adventures, sometimes purchased with Gold. During your turn, you may use one item as a Bonus Action.
-              Items marked <strong style={{ color: ACCENT }}>(+)</strong> are masterwork, with greater powers and cost.
-            </p>
-            {Object.entries(itemsByCategory).map(([cat, list]) => (
-              <div key={cat} style={{ marginBottom: 20 }}>
-                <SectionHeading id={"items-" + cat.replace(/\s+/g, "-").toLowerCase()} level={2}>{cat}</SectionHeading>
-                {list[0].categoryNote && <p style={{ fontSize: 13, color: TEXT.muted, marginBottom: 10 }}>{list[0].categoryNote}</p>}
-                <div className="item-grid">
-                  {list.map((it, i) => (
-                    <div key={i} style={{ fontSize: 13, lineHeight: 1.6, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
-                      <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
-                      <span style={{ color: TEXT.body }}>: {withGlossary(it.text, reference)}</span>
+        {/* ═══ ITEMS ═══ */}
+        {view === "items" && (
+          <>
+            <Section title="Gold & Inventory">
+              <Field label="Gold">
+                <input type="number" min="0" style={{ maxWidth: 140 }} value={char.gold} onChange={e => set({ gold: Number(e.target.value) || 0 })} />
+              </Field>
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                {char.inventory.length === 0 && char.customItems.length === 0 && (
+                  <div style={{ fontSize: 13, color: TEXT.faint }}>Nothing carried yet — add items from the list below.</div>
+                )}
+                {char.inventory.map((e, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <span style={{ flex: 1, color: TEXT.body }}>{e.name}</span>
+                    <button onClick={() => adjustInventory(e.name, -1)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, width: 26, height: 26 }}>−</button>
+                    <span style={{ color: TEXT.name, minWidth: 18, textAlign: "center" }}>{e.qty}</span>
+                    <button onClick={() => adjustInventory(e.name, 1)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, width: 26, height: 26 }}>+</button>
+                  </div>
+                ))}
+                {char.customItems.map(c => (
+                  <div key={c.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="text" placeholder="Custom item name" value={c.name} onChange={e => updateCustomItem(c.id, { name: e.target.value })} style={{ flex: 1 }} />
+                    <input type="text" placeholder="What it does" value={c.text} onChange={e => updateCustomItem(c.id, { text: e.target.value })} style={{ flex: 2 }} />
+                    <input type="number" min="0" style={{ maxWidth: 60 }} value={c.qty} onChange={e => updateCustomItem(c.id, { qty: Number(e.target.value) || 0 })} />
+                    <button onClick={() => removeCustomItem(c.id)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "0 10px" }}>✕</button>
+                  </div>
+                ))}
+                <button onClick={addCustomItem} style={{ alignSelf: "flex-start", background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 12px", fontSize: 13 }}>+ Add custom item (GM-granted, homebrew, etc.)</button>
+              </div>
+            </Section>
+
+            <Section title="Item Compendium">
+              <input type="text" placeholder="Search items…" value={itemSearch} onChange={e => setItemSearch(e.target.value)} style={{ marginBottom: 14 }} />
+              {Object.entries(itemsByCategory).map(([cat, list]) => {
+                const filtered = list.filter(itemMatches);
+                if (filtered.length === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: 18 }}>
+                    <div style={{ fontFamily: HEADFONT, fontSize: 15, color: TEXT.name, marginBottom: 8 }}>{cat}</div>
+                    <div className="item-grid">
+                      {filtered.map((it, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, lineHeight: 1.5, padding: "8px 0", borderBottom: `0.5px solid ${BORDER}` }}>
+                          <div>
+                            <strong style={{ color: TEXT.name }}>{it.name}{it.masterwork && <span style={{ color: ACCENT }}> (+)</span>}</strong>
+                            <span style={{ color: TEXT.body }}>: {it.text}</span>
+                          </div>
+                          <button onClick={() => addToInventory(it.name)} style={{ flexShrink: 0, background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}>
+                            + Add{invMap[it.name] ? ` (${invMap[it.name]})` : ""}
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                );
+              })}
+            </Section>
+          </>
+        )}
+
+        {/* ═══ CHARACTER SHEET (stripped-down, for display) ═══ */}
+        {view === "sheet" && (
+          <div className="sheet-box" style={{ background: PANEL, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 24, color: ACCENT }}>{char.charName || "Unnamed Adventurer"}</div>
+                <div style={{ fontSize: 13, color: TEXT.faint, marginTop: 2 }}>
+                  {cls ? cls.name : "No class"}{spec ? ` — ${spec.name}` : ""} · Level {char.level}
+                  {background ? ` · ${background.name}` : ""}
                 </div>
               </div>
-            ))}
+              <button className="no-print" onClick={() => window.print()} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: TEXT.muted, padding: "6px 14px", fontSize: 13 }}>Print</button>
+            </div>
+            {char.charConcept && <div style={{ fontSize: 13, color: TEXT.body, marginTop: 10, lineHeight: 1.6 }}>{char.charConcept}</div>}
 
-            {/* Reference */}
-            <SectionHeading id="reference" level={1}>Reference</SectionHeading>
-            <p style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>Definitions for assorted status effects and terms used above.</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {reference.map((r, i) => (
-                <div key={i} style={{ fontSize: 14, lineHeight: 1.7 }}>
-                  <strong style={{ color: TEXT.name }}>{r.term}</strong>
-                  <span style={{ color: TEXT.body }}>: {r.text}</span>
+            <div className="field-grid-4" style={{ margin: "16px 0" }}>
+              <StatChip label="Armor" value={stats.armor} />
+              <StatChip label="Speed" value={stats.speed} />
+              <StatChip label="Health" value={`${char.hpCurrent} / ${stats.health}`} />
+              <StatChip label="Mana" value={stats.mana !== null ? `${char.manaCurrent} / ${stats.mana}` : null} />
+            </div>
+
+            <div className="no-print" style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: TEXT.faint }}>Health</span>
+                <input type="number" min="1" style={{ width: 60 }} value={hpAdjust} onChange={e => setHpAdjust(Math.max(1, Number(e.target.value) || 1))} />
+                <button onClick={() => applyHp(-hpAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "4px 10px" }}>− Damage</button>
+                <button onClick={() => applyHp(hpAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#7bc47f", padding: "4px 10px" }}>+ Heal</button>
+              </div>
+              {stats.mana !== null && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: TEXT.faint }}>Mana</span>
+                  <input type="number" min="1" style={{ width: 60 }} value={manaAdjust} onChange={e => setManaAdjust(Math.max(1, Number(e.target.value) || 1))} />
+                  <button onClick={() => applyMana(-manaAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "4px 10px" }}>− Spend</button>
+                  <button onClick={() => applyMana(manaAdjust)} style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#7bc47f", padding: "4px 10px" }}>+ Restore</button>
                 </div>
+              )}
+            </div>
+
+            {cls && cls.attacks.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Attacks</div>
+                {cls.attacks.map((a, i) => (
+                  <div key={i} style={{ fontSize: 13, color: TEXT.body }}>{a.name}: {a.toHit} to hit, {a.damage} dmg, Range {a.range}</div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+              {skillDefs.map(s => (char.skills[s.name] || 0) > 0 && (
+                <div key={s.name} style={{ fontSize: 12, color: TEXT.body }}>{s.name} <strong style={{ color: TEXT.name }}>+{char.skills[s.name]}</strong></div>
               ))}
             </div>
+
+            {known.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                  {cls ? cls.trainingsLabel : "Trainings"}
+                </div>
+                {available.filter(t => known.includes(t.name)).map((t, i) => (
+                  <div key={i} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 4 }}>
+                    <strong style={{ color: TEXT.name }}>{t.name}</strong>: {t.text}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {char.heroBlessing && (
+              <div style={{ fontSize: 12, color: TEXT.body, marginBottom: 14 }}>
+                <strong style={{ color: TEXT.name }}>Hero's Blessing</strong>: {(HERO_BLESSINGS.find(h => h.id === char.heroBlessing) || {}).label}
+              </div>
+            )}
+
+            {activeFeatures.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Features</div>
+                {activeFeatures.map((f, i) => (
+                  <div key={i} style={{ fontSize: 12, color: TEXT.body, lineHeight: 1.5, marginBottom: 4 }}>
+                    <strong style={{ color: TEXT.name }}>{f.name}</strong>: {f.text}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontSize: 13, color: TEXT.body, marginBottom: 10 }}>Gold: <strong style={{ color: TEXT.name }}>{char.gold}</strong></div>
+
+            {(char.inventory.length > 0 || char.customItems.length > 0) && (
+              <div>
+                <div style={{ fontSize: 11, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Inventory</div>
+                {char.inventory.map((e, i) => (
+                  <div key={i} style={{ fontSize: 12, color: TEXT.body }}>{e.name} {e.qty > 1 ? `×${e.qty}` : ""}</div>
+                ))}
+                {char.customItems.filter(c => c.name).map(c => (
+                  <div key={c.id} style={{ fontSize: 12, color: TEXT.body }}>{c.name} {c.qty > 1 ? `×${c.qty}` : ""} <span style={{ color: TEXT.faint }}>— {c.text}</span></div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {/* ═══ NOTES ═══ */}
+        {view === "notes" && (
+          <>
+            <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>Notes</div>
+            <textarea
+              value={char.charNotes}
+              onChange={e => set({ charNotes: e.target.value })}
+              placeholder="Freeform notes about your character, campaign, plans…"
+              rows={10}
+              style={{ width: "100%", fontSize: 14, lineHeight: 1.5, marginBottom: 28 }}
+            />
+
+            <div style={{ fontSize: 13, color: TEXT.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>Quick List</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {char.noteRows.map(row => (
+                <div key={row.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="text" value={row.text} onChange={e => updateNoteRow(row.id, e.target.value)} placeholder="Note…" style={{ flex: 1, fontSize: 14 }} />
+                  <button onClick={() => removeNoteRow(row.id)} aria-label="Remove note" style={{ background: "transparent", border: "none", color: TEXT.faint, fontSize: 18, lineHeight: 1, padding: "2px 4px", flexShrink: 0 }}>✕</button>
+                </div>
+              ))}
+              <button onClick={addNoteRow} style={{ fontSize: 13, color: ACCENT, background: "transparent", border: `0.5px solid ${ACCENT}`, borderRadius: 4, padding: "4px 10px", alignSelf: "flex-start" }}>+ Add row</button>
+            </div>
+          </>
+        )}
       </div>
 
-      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 12, color: TEXT.faint }}>
-        Flagon Dice is a playtest project by Friendly Flagon Games. Questions to contact@flagonquest.com.
+      <div className="no-print" style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 12, color: TEXT.faint }}>
+        Flagon Dice is a playtest project by Friendly Flagon Games.
       </div>
     </div>
   );

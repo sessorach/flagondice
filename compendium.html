@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flagon Dice — Compendium</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='6' fill='%23191410' stroke='%23c9752f' stroke-width='2'/%3E%3Ccircle cx='11' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='11' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='11' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3Ccircle cx='21' cy='21' r='2.4' fill='%23e8d9c4'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #191410;
+      color: #e8d9c4;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; }
+    button { font-family: inherit; cursor: pointer; }
+    button:hover { opacity: 0.85; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a2f24; border-radius: 4px; }
+
+    .site-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    @media (min-width: 900px) {
+      .site-header { display: grid; grid-template-columns: 1fr auto 1fr; }
+      .site-header-left  { order: 1; justify-self: start; }
+      .site-header-brand { order: 2; justify-self: center; }
+      .site-header-nav   { order: 3; justify-self: end; }
+    }
+
+    .compendium-layout { display: block; }
+    .compendium-toc { margin-bottom: 24px; }
+    @media (min-width: 900px) {
+      .compendium-layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 28px;
+        align-items: start;
+      }
+      .compendium-toc {
+        position: sticky;
+        top: 78px;
+        max-height: calc(100vh - 96px);
+        overflow-y: auto;
+        margin-bottom: 0;
+      }
+    }
+
+    .stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .spec-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 760px) { .spec-grid { grid-template-columns: repeat(3, 1fr); } }
+    .bg-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 700px) { .bg-grid { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const ACCENT = "#c9752f";
+const BOOKLINK = "#7fb1c9";
+const TEXT = { name: "#e8d9c4", body: "#cdb99e", label: "#c9752f", muted: "#a3907a", faint: "#6e5f4d" };
+const PANEL = "#221a13";
+const BORDER = "#3a2f24";
+const HEADFONT = "'Cinzel', Georgia, serif";
+
+function withGlossary(text, glossary) {
+  if (!text || !glossary || glossary.length === 0) return text;
+  const terms = [...glossary].sort((a, b) => b.term.length - a.term.length);
+  const escaped = terms.map(g => g.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`\\b(${escaped.join("|")})s?\\b`, "g");
+  const byTerm = Object.fromEntries(glossary.map(g => [g.term, g.text]));
+  const parts = text.split(re);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    const key = part && byTerm[part.replace(/s$/, "")] ? part.replace(/s$/, "") : null;
+    return key ? <GlossaryTerm key={i} term={part} description={byTerm[key]} /> : part;
+  });
+}
+
+function GlossaryTerm({ term, description }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+      style={{ position: "relative", borderBottom: `1px dotted ${ACCENT}`, cursor: "help" }}
+    >
+      {term}
+      {open && (
+        <span style={{
+          position: "absolute", left: 0, top: "100%", marginTop: 4, zIndex: 50,
+          display: "block", width: 220,
+          background: PANEL, border: `0.5px solid ${ACCENT}`, borderRadius: 6,
+          padding: "6px 10px", fontSize: 12, lineHeight: 1.4,
+          color: TEXT.body, fontWeight: 400,
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
+        }}>
+          <strong style={{ color: ACCENT }}>{term}</strong>: {description}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Stars({ n }) {
+  return <span style={{ color: ACCENT, letterSpacing: 1 }}>{"★".repeat(n)}{"☆".repeat(3 - n)}</span>;
+}
+
+function StatPill({ label, value }) {
+  if (value === null || value === undefined) return null;
+  return (
+    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 6, padding: "6px 12px", fontSize: 13 }}>
+      <span style={{ color: TEXT.faint }}>{label} </span>
+      <strong style={{ color: TEXT.name }}>{value}</strong>
+    </div>
+  );
+}
+
+function SectionHeading({ id, children, level }) {
+  return (
+    <div id={id} style={{
+      fontFamily: HEADFONT, fontWeight: 700,
+      fontSize: level === 1 ? 26 : 19,
+      color: level === 1 ? ACCENT : TEXT.name,
+      marginTop: level === 1 ? 30 : 18,
+      marginBottom: 12,
+      paddingTop: level === 1 ? 14 : 0,
+      borderTop: level === 1 ? `0.5px solid ${BORDER}` : "none",
+      scrollMarginTop: 90,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function TrainingList({ trainings, level, glossary, label }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {trainings.map((t, i) => {
+          const locked = level < t.levelReq;
+          return (
+            <div key={i} style={{ fontSize: 14, lineHeight: 1.6, opacity: locked ? 0.45 : 1 }}>
+              <strong style={{ color: TEXT.name }}>{t.name}</strong>
+              {t.levelReq > 1 && <span style={{ color: TEXT.faint, fontSize: 12 }}> (level {t.levelReq}+)</span>}
+              <span style={{ color: TEXT.body }}>: {withGlossary(t.text, glossary)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SpecCard({ spec, glossary }) {
+  const [openLevel, setOpenLevel] = useState(2);
+  return (
+    <div style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 14 }}>
+      <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 16, color: TEXT.name }}>{spec.name}</div>
+      <div style={{ fontSize: 12, color: TEXT.faint, margin: "4px 0 8px" }}>{spec.role} · <Stars n={spec.difficulty} /></div>
+      <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginBottom: 10 }}>{spec.tagline}</div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {spec.levels.map(l => (
+          <button key={l.level} onClick={() => setOpenLevel(l.level)} style={{
+            fontSize: 12, padding: "4px 10px", borderRadius: 5,
+            background: openLevel === l.level ? ACCENT : "transparent",
+            color: openLevel === l.level ? "#191410" : TEXT.muted,
+            border: `0.5px solid ${openLevel === l.level ? ACCENT : BORDER}`,
+          }}>
+            Level {l.level}
+          </button>
+        ))}
+      </div>
+
+      {spec.levels.filter(l => l.level === openLevel).map(l => (
+        <div key={l.level} style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+          {l.abilities.map((a, i) => (
+            <div key={i} style={{ fontSize: 13, lineHeight: 1.6 }}>
+              <strong style={{ color: TEXT.name }}>{a.name}</strong>
+              <span style={{ color: TEXT.body }}>: {withGlossary(a.text, glossary)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {spec.trainingsAdded.length > 0 && (
+        <TrainingList trainings={spec.trainingsAdded} level={10} glossary={glossary} label="Adds to the training/spell list" />
+      )}
+    </div>
+  );
+}
+
+function ClassCard({ cls, glossary }) {
+  return (
+    <div style={{ marginBottom: 26 }}>
+      <SectionHeading id={cls.id} level={2}>{cls.name}</SectionHeading>
+      <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 8 }}>{cls.role} · <Stars n={cls.difficulty} /></div>
+      <div style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 12 }}>{cls.tagline}</div>
+
+      <div className="stat-row" style={{ marginBottom: 14 }}>
+        <StatPill label="Health" value={cls.stats.health} />
+        <StatPill label="Armor" value={cls.stats.armor} />
+        <StatPill label="Speed" value={cls.stats.speed} />
+        <StatPill label="Mana" value={cls.stats.mana} />
+        {cls.attacks.map((a, i) => (
+          <StatPill key={i} label={a.name} value={`${a.toHit} to hit, ${a.damage} dmg, Range ${a.range}`} />
+        ))}
+      </div>
+
+      <div style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 6 }}>
+        <strong style={{ color: TEXT.name }}>{cls.resourceAbility.name}</strong>
+        <span style={{ color: TEXT.body }}>: {withGlossary(cls.resourceAbility.text, glossary)}</span>
+      </div>
+      {cls.trainingsIntro && (
+        <div style={{ fontSize: 13, color: TEXT.muted, lineHeight: 1.6, marginBottom: 6 }}>{cls.trainingsIntro}</div>
+      )}
+
+      <TrainingList trainings={cls.baseTrainings} level={10} glossary={glossary} label={cls.trainingsLabel} />
+
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Level progression</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {cls.levels.map(l => (
+            <div key={l.level} style={{ fontSize: 13, lineHeight: 1.6, color: TEXT.body }}>
+              <strong style={{ color: TEXT.name }}>Lv {l.level}.</strong> {l.text.join(" ")}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 13, color: TEXT.faint, textTransform: "uppercase", letterSpacing: "0.06em", margin: "16px 0 8px" }}>Specializations</div>
+      <div className="spec-grid">
+        {cls.specializations.map(s => <SpecCard key={s.id} spec={s} glossary={glossary} />)}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [rules, setRules] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [reference, setReference] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("data/rules.json").then(r => r.json()),
+      fetch("data/classes.json").then(r => r.json()),
+      fetch("data/backgrounds.json").then(r => r.json()),
+      fetch("data/reference.json").then(r => r.json()),
+    ]).then(([r, c, b, ref]) => {
+      setRules(r); setClasses(c); setBackgrounds(b); setReference(ref);
+      setLoading(false);
+    }).catch(err => { setLoadError(err.message); setLoading(false); });
+  }, []);
+
+  const tabStyle = () => ({
+    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    background: "transparent", color: TEXT.muted,
+    border: `0.5px solid ${BORDER}`,
+    textDecoration: "none", display: "inline-flex", alignItems: "center",
+  });
+  const bookLinkStyle = active => ({
+    padding: "6px 14px", fontSize: 15, fontWeight: 500, borderRadius: 6,
+    background: active ? "#1a333b" : "#132227", color: BOOKLINK,
+    border: `0.5px solid ${active ? BOOKLINK : "#2f5a67"}`,
+    textDecoration: "none", display: "inline-flex", alignItems: "center",
+  });
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: TEXT.faint, fontFamily: HEADFONT, fontSize: 18 }}>
+      Loading Flagon Dice…
+    </div>
+  );
+  if (loadError) return (
+    <div style={{ minHeight: "100vh", padding: 40, color: "#e0785a", fontSize: 16, lineHeight: 1.6, maxWidth: 620 }}>
+      <strong>Couldn't load the compendium</strong>
+      <p style={{ marginTop: 10, color: TEXT.muted }}>Error: {loadError}</p>
+    </div>
+  );
+
+  const toc = [
+    { id: "rules", title: "Rules", level: 1 },
+    { id: "classes", title: "Classes", level: 1 },
+    ...classes.map(c => ({ id: c.id, title: c.name, level: 2 })),
+    { id: "backgrounds", title: "Backgrounds", level: 1 },
+  ];
+
+  return (
+    <div>
+      <div className="site-header" style={{
+        padding: "12px 20px", borderBottom: `0.5px solid ${BORDER}`,
+        background: "#14100c", position: "sticky", top: 0, zIndex: 100,
+      }}>
+        <div className="site-header-brand" style={{ textAlign: "center" }}>
+          <a href="index.html" style={{ textDecoration: "none", color: "inherit" }}>
+            <div style={{ fontFamily: HEADFONT, fontSize: 22, fontWeight: 700, color: ACCENT, letterSpacing: "0.03em" }}>Flagon Dice</div>
+            <div style={{ fontSize: 12, color: TEXT.faint, marginTop: 1 }}>Roll one die, keep it, get on with it</div>
+          </a>
+        </div>
+        <div className="site-header-left" />
+        <div className="site-header-nav" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <a href="index.html" style={tabStyle()}>Builder</a>
+          <a href="index.html" style={tabStyle()}>Items</a>
+          <a href="index.html" style={tabStyle()}>Character sheet</a>
+          <a href="index.html" style={tabStyle()}>Notes</a>
+
+          <div style={{ width: 40, display: "flex", justifyContent: "center", alignItems: "center", flexShrink: 0 }} aria-hidden="true">
+            <div style={{ width: 1, height: 22, background: BORDER }} />
+          </div>
+
+          <a href="compendium.html" style={bookLinkStyle(true)}>Compendium</a>
+          <a href="reference.html" target="_blank" rel="noopener noreferrer" style={bookLinkStyle(false)}>Reference</a>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 20 }}>
+        <div className="compendium-layout">
+          <nav className="compendium-toc">
+            <div style={{ fontSize: 12, color: TEXT.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>Contents</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {toc.map(s => (
+                <a key={s.id} href={`#${s.id}`} style={{
+                  fontSize: s.level >= 2 ? 13 : 14,
+                  fontWeight: s.level >= 2 ? 400 : 600,
+                  color: s.level >= 2 ? TEXT.muted : TEXT.body,
+                  paddingLeft: s.level >= 2 ? 14 : 0,
+                  textDecoration: "none", lineHeight: 1.9,
+                }}>
+                  {s.title}
+                </a>
+              ))}
+            </div>
+          </nav>
+
+          <div>
+            <SectionHeading id="rules" level={1}>Rules</SectionHeading>
+            {rules.map(s => (
+              <div key={s.id}>
+                <SectionHeading id={"r-" + s.id} level={2}>{s.title}</SectionHeading>
+                {s.body.split(/\n\n+/).map((p, i) => (
+                  <p key={i} style={{ fontSize: 14, color: TEXT.body, lineHeight: 1.7, marginBottom: 10 }}>
+                    {withGlossary(p, reference)}
+                  </p>
+                ))}
+              </div>
+            ))}
+
+            <SectionHeading id="classes" level={1}>Classes</SectionHeading>
+            {classes.map(c => <ClassCard key={c.id} cls={c} glossary={reference} />)}
+
+            <SectionHeading id="backgrounds" level={1}>Backgrounds</SectionHeading>
+            <div className="bg-grid">
+              {backgrounds.map(b => (
+                <div key={b.id} style={{ background: "#1c150f", border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: 14 }}>
+                  <div style={{ fontFamily: HEADFONT, fontWeight: 700, fontSize: 16, color: TEXT.name, marginBottom: 6 }}>{b.name}</div>
+                  {b.description && <div style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6, marginBottom: 8 }}>{b.description}</div>}
+                  <div style={{ fontSize: 13, color: TEXT.body, marginBottom: 6 }}><strong style={{ color: TEXT.name }}>Skills</strong>: {b.skills}</div>
+                  {b.features.map((f, i) => (
+                    <div key={i} style={{ fontSize: 13, color: TEXT.body, lineHeight: 1.6 }}>
+                      <strong style={{ color: TEXT.name }}>{f.name}</strong>: {withGlossary(f.text, reference)}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center", padding: "26px 16px 40px", fontSize: 12, color: TEXT.faint }}>
+        Flagon Dice is a playtest project by Friendly Flagon Games. Questions to contact@flagonquest.com.
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
