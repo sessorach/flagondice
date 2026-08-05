@@ -127,8 +127,8 @@ function collectBonusGrants(char, backgrounds, items) {
   const grants = [];
   const bg = backgrounds.find(b => b.id === char.backgroundId);
   if (bg && bg.bonusTrainingGrants) bg.bonusTrainingGrants.forEach(g => grants.push({ ...g, source: bg.name }));
-  (char.learnedBonusTrainings || []).forEach(tid => {
-    const item = items.find(it => it.bonusTrainingGrant && it.bonusTrainingGrant.trainingId === tid);
+  (char.learnedBonusTrainings || []).forEach(entry => {
+    const item = items.find(it => it.bonusTrainingGrant && it.bonusTrainingGrant.trainingId === entry.trainingId);
     if (item) grants.push({ ...item.bonusTrainingGrant, source: item.name });
   });
   const byTraining = {};
@@ -201,9 +201,12 @@ function emptyCharacter() {
     gold: 0, inventory: [], customItems: [],
     charNotes: "", noteRows: [],
     // Bonus spells/trainings learned permanently from items (e.g. Tome of
-    // Mana Bolt) — just the trainingId list; see collectBonusGrants for
-    // how these combine with Background grants. bonusTrainingUses tracks
-    // free casts spent this encounter, keyed by trainingId.
+    // Mana Bolt) — [{ trainingId, itemName, manaBonus }], the itemName/
+    // manaBonus kept alongside so the Builder's audit list can show what
+    // came from where and "Remove" can reverse the exact mana bonus it
+    // granted. See collectBonusGrants for how these combine with
+    // Background grants. bonusTrainingUses tracks free casts spent this
+    // encounter, keyed by trainingId.
     learnedBonusTrainings: [], bonusManaMax: 0, bonusTrainingUses: {},
   };
 }
@@ -547,16 +550,39 @@ function App() {
 
   // Consumes one copy of an item that permanently teaches a bonus
   // training (e.g. Tome of Mana Bolt) — removes it from inventory, adds
-  // the training to the learned list (deduped), and applies any
-  // permanent Mana bonus it carries.
+  // the training to the learned list (deduped by trainingId), and
+  // applies any permanent Mana bonus it carries.
   const learnFromItem = item => {
     if (!item.bonusTrainingGrant || (invMap[item.name] || 0) <= 0) return;
+    if (char.learnedBonusTrainings.some(e => e.trainingId === item.bonusTrainingGrant.trainingId)) return;
     adjustInventory(item.name, -1);
     set({
-      learnedBonusTrainings: char.learnedBonusTrainings.includes(item.bonusTrainingGrant.trainingId)
-        ? char.learnedBonusTrainings
-        : [...char.learnedBonusTrainings, item.bonusTrainingGrant.trainingId],
+      learnedBonusTrainings: [...char.learnedBonusTrainings, {
+        trainingId: item.bonusTrainingGrant.trainingId, itemName: item.name, manaBonus: item.manaBonus || 0,
+      }],
       bonusManaMax: char.bonusManaMax + (item.manaBonus || 0),
+    });
+  };
+
+  // Fully undoes a learned-from-item bonus training — for an accidental
+  // "Learn" click. Reverses exactly the Mana bonus that entry granted
+  // (not the whole pool), clamps current Mana down if it's now above the
+  // new max, and gives the consumed item back to inventory so the whole
+  // action is undone, not just its mechanical effect.
+  const unlearnBonusTraining = trainingId => {
+    const entry = char.learnedBonusTrainings.find(e => e.trainingId === trainingId);
+    if (!entry) return;
+    const newBonusManaMax = char.bonusManaMax - entry.manaBonus;
+    const newStats = computeStats(cls, spec, char.level, char.heroBlessing, newBonusManaMax);
+    const alreadyCarried = char.inventory.find(e => e.name === entry.itemName);
+    const nextInventory = alreadyCarried
+      ? char.inventory.map(e => e.name === entry.itemName ? { ...e, qty: e.qty + 1 } : e)
+      : [...char.inventory, { name: entry.itemName, qty: 1 }];
+    set({
+      learnedBonusTrainings: char.learnedBonusTrainings.filter(e => e.trainingId !== trainingId),
+      bonusManaMax: newBonusManaMax,
+      manaCurrent: newStats.mana !== null ? Math.min(char.manaCurrent, newStats.mana) : char.manaCurrent,
+      inventory: nextInventory,
     });
   };
 
@@ -867,6 +893,34 @@ function App() {
               )}
             </Section>
 
+            {/* Audit trail for anything permanently learned from a
+                consumable item (e.g. Tome of Mana Bolt) — lets a mistaken
+                "Learn" click on the Items tab be undone cleanly, since
+                unlearnBonusTraining reverses exactly the Mana bonus that
+                entry granted. */}
+            <Section title="Permanent Item Bonuses">
+              {char.learnedBonusTrainings.length === 0 ? (
+                <div style={{ fontSize: 13, color: TEXT.faint }}>
+                  Nothing learned yet — items that permanently teach a bonus spell/training (like the Tome of Mana Bolt) show a "Learn" button on the Items tab once you're carrying one.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {char.learnedBonusTrainings.map(entry => {
+                    const t = bonusTrainings.find(bt => bt.id === entry.trainingId);
+                    return (
+                      <div key={entry.trainingId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, fontSize: 13 }}>
+                        <span style={{ color: TEXT.body }}>
+                          <strong style={{ color: TEXT.name }}>{t ? t.name : entry.trainingId}</strong>
+                          <span style={{ color: TEXT.faint }}> — from {entry.itemName}{entry.manaBonus ? `, +${entry.manaBonus} max Mana` : ""}</span>
+                        </span>
+                        <button onClick={() => unlearnBonusTraining(entry.trainingId)} title="Undo — reverses the Mana bonus and returns the item to Inventory" style={{ background: "transparent", border: "0.5px solid #c0392b", color: "#c0392b", borderRadius: 6, padding: "3px 10px", fontSize: 12, flexShrink: 0 }}>Remove</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Section>
+
             <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <button onClick={doExport} style={actionBtn()}>Export</button>
               <button onClick={() => importRef.current.click()} style={actionBtn()}>Import</button>
@@ -931,11 +985,11 @@ function App() {
                             {it.bonusTrainingGrant && (
                               <button
                                 onClick={() => learnFromItem(it)}
-                                disabled={(invMap[it.name] || 0) <= 0 || char.learnedBonusTrainings.includes(it.bonusTrainingGrant.trainingId)}
+                                disabled={(invMap[it.name] || 0) <= 0 || char.learnedBonusTrainings.some(e => e.trainingId === it.bonusTrainingGrant.trainingId)}
                                 title={(invMap[it.name] || 0) <= 0 ? "Add it to inventory first" : "Consume 1 to permanently learn this"}
                                 style={{ background: "transparent", border: `0.5px solid ${BOOKLINK}`, color: BOOKLINK, borderRadius: 6, padding: "2px 10px", fontSize: 12, height: 26 }}
                               >
-                                {char.learnedBonusTrainings.includes(it.bonusTrainingGrant.trainingId) ? "Learned" : "Learn"}
+                                {char.learnedBonusTrainings.some(e => e.trainingId === it.bonusTrainingGrant.trainingId) ? "Learned" : "Learn"}
                               </button>
                             )}
                           </div>
