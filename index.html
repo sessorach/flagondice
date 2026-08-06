@@ -449,6 +449,11 @@ function App() {
   const [itemSearch, setItemSearch] = useState("");
   const [hiddenItemGroups, setHiddenItemGroups] = useState({});
   const [shareMsg, setShareMsg] = useState("");
+  // Tracks the single most recent consumable/Charm use so the sheet can
+  // offer an "Undo" for a misclick — intentionally not part of the saved
+  // character (it's a transient UI convenience, not game state), and
+  // cleared whenever the active character changes below.
+  const [lastItemUse, setLastItemUse] = useState(null);
   const importRef = useRef();
   const firstLoad = useRef(true);
 
@@ -475,6 +480,7 @@ function App() {
   }, [activeId, char]);
   useEffect(() => { localStorage.setItem("flagondice-characters", JSON.stringify(characters)); }, [characters]);
   useEffect(() => { localStorage.setItem("flagondice-active-character", activeId); }, [activeId]);
+  useEffect(() => { setLastItemUse(null); }, [activeId]);
   useEffect(() => {
     setCharacters(cs => cs.some(c => c.id === activeId && c.name === char.charName)
       ? cs
@@ -614,20 +620,33 @@ function App() {
   // ── Items tab helpers ──
   const itemsByCategory = items.reduce((acc, it) => { (acc[it.category] = acc[it.category] || []).push(it); return acc; }, {});
   const invMap = char.inventory.reduce((acc, e) => { acc[e.name] = e.qty; return acc; }, {});
+  // addToInventory/adjustInventory/updateCustomItem use the functional
+  // setChar form (reading the latest state at application time) rather
+  // than closing over the outer `char` — needed because these get called
+  // from a stored "Undo" callback (see lastItemUse below) that may fire
+  // several renders after it was created, when outer `char` would
+  // otherwise be stale and silently double-apply against old data.
   const addToInventory = name => {
-    const found = char.inventory.find(e => e.name === name);
-    if (found) set({ inventory: char.inventory.map(e => e.name === name ? { ...e, qty: e.qty + 1 } : e) });
-    else set({ inventory: [...char.inventory, { name, qty: 1 }] });
-  };
-  const adjustInventory = (name, delta) => {
-    set({
-      inventory: char.inventory
-        .map(e => e.name === name ? { ...e, qty: e.qty + delta } : e)
-        .filter(e => e.qty > 0),
+    setChar(c => {
+      const found = c.inventory.find(e => e.name === name);
+      return {
+        ...c,
+        inventory: found
+          ? c.inventory.map(e => e.name === name ? { ...e, qty: e.qty + 1 } : e)
+          : [...c.inventory, { name, qty: 1 }],
+      };
     });
   };
+  const adjustInventory = (name, delta) => {
+    setChar(c => ({
+      ...c,
+      inventory: c.inventory
+        .map(e => e.name === name ? { ...e, qty: e.qty + delta } : e)
+        .filter(e => e.qty > 0),
+    }));
+  };
   const addCustomItem = () => set({ customItems: [...char.customItems, { id: makeUid(), name: "", text: "", qty: 1 }] });
-  const updateCustomItem = (id, patch) => set({ customItems: char.customItems.map(c => c.id === id ? { ...c, ...patch } : c) });
+  const updateCustomItem = (id, patch) => setChar(c => ({ ...c, customItems: c.customItems.map(ci => ci.id === id ? { ...ci, ...patch } : ci) }));
   const removeCustomItem = id => set({ customItems: char.customItems.filter(c => c.id !== id) });
 
   // Does this item's "training" grant (if it has one) point at a
@@ -683,11 +702,14 @@ function App() {
   const applyMana = delta => set({ manaCurrent: Math.max(0, Math.min(stats.mana || 0, char.manaCurrent + delta)) });
 
   // Free casts used this encounter for a bonus training — clamped to how
-  // many free casts are actually granted.
+  // many free casts are actually granted. resetBonusUse is the individual
+  // per-training reset, alongside the sheet's big "Refresh resources"
+  // button that resets everything at once.
   const adjustBonusUse = (trainingId, freeCasts, delta) => {
     const next = Math.max(0, Math.min(freeCasts, (char.bonusTrainingUses[trainingId] || 0) + delta));
     set({ bonusTrainingUses: { ...char.bonusTrainingUses, [trainingId]: next } });
   };
+  const resetBonusUse = trainingId => set({ bonusTrainingUses: { ...char.bonusTrainingUses, [trainingId]: 0 } });
 
   // Which bucket an item's category falls into for the sheet's inventory
   // controls: Consumables (and Permanent Consumes, same as the Items
@@ -699,8 +721,25 @@ function App() {
     if (item.category === "Charms") return "charm";
     return null;
   };
-  const useConsumable = name => adjustInventory(name, -1);
-  const toggleCharmUse = name => set({ charmUses: { ...char.charmUses, [name]: !char.charmUses[name] } });
+  // Each of these records what it did in lastItemUse so the sheet can
+  // offer a one-step "Undo" for a misclick — addToInventory (not a plain
+  // +1) is what correctly restores an entry that a -1 removed entirely.
+  const useConsumable = name => {
+    adjustInventory(name, -1);
+    setLastItemUse({ label: `Used ${name}`, undo: () => addToInventory(name) });
+  };
+  const useCustomConsumable = (id, name, prevQty) => {
+    updateCustomItem(id, { qty: Math.max(0, prevQty - 1) });
+    setLastItemUse({ label: `Used ${name}`, undo: () => updateCustomItem(id, { qty: prevQty }) });
+  };
+  const toggleCharmUse = name => {
+    const wasUsed = !!char.charmUses[name];
+    set({ charmUses: { ...char.charmUses, [name]: !wasUsed } });
+    setLastItemUse({
+      label: `${wasUsed ? "Un-used" : "Used"} ${name}`,
+      undo: () => setChar(c => ({ ...c, charmUses: { ...c.charmUses, [name]: wasUsed } })),
+    });
+  };
 
   // Health, Mana, per-encounter bonus-training free casts, and Charm uses
   // all reset together at the end of a fight — one button instead of a
@@ -1211,6 +1250,25 @@ function App() {
               ↻ Refresh resources (new fight)
             </button>
 
+            {/* Undo for the single most recent item use — covers a
+                misclick on a Consumable/Charm's Use button. Not part of
+                the saved character; clears on character switch. */}
+            {lastItemUse && (
+              <div className="no-print" style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                marginTop: 8, padding: "6px 12px", background: "#1c150f",
+                border: `0.5px solid ${BORDER}`, borderRadius: 6,
+              }}>
+                <span style={{ fontSize: 13, color: TEXT.faint }}>{lastItemUse.label}</span>
+                <button
+                  onClick={() => { lastItemUse.undo(); setLastItemUse(null); }}
+                  style={{ background: "transparent", border: `0.5px solid ${ACCENT}`, color: ACCENT, borderRadius: 6, padding: "3px 10px", fontSize: 13 }}
+                >
+                  Undo
+                </button>
+              </div>
+            )}
+
             {/* Identity (name/meta/concept) paired with the Skills summary
                 so Skills isn't a sparse full-width row by itself. */}
             <div className="pair-grid" style={{ marginTop: 14 }}>
@@ -1285,6 +1343,7 @@ function App() {
                           <span className="no-print" style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{ fontSize: 13, color: TEXT.faint }}>Free casts: {used} / {g.freeCasts}</span>
                             <button onClick={() => adjustBonusUse(g.trainingId, g.freeCasts, 1)} disabled={used >= g.freeCasts} title="Spend a free cast" style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: "#e0785a", padding: "6px 10px", fontSize: 13, lineHeight: 1.6 }}>Use</button>
+                            <button onClick={() => resetBonusUse(g.trainingId)} title="Reset just this one" style={{ background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 4, color: TEXT.muted, width: 30, height: 30, fontSize: 15, lineHeight: 1 }}>↺</button>
                           </span>
                         )}
                         {g.manaCost != null && <span style={{ fontSize: 13, color: TEXT.faint }}>{g.freeCasts > 0 ? "After that, " : ""}costs {g.manaCost} Mana</span>}
@@ -1356,7 +1415,7 @@ function App() {
                         <strong style={{ color: TEXT.name }}>{c.name}</strong>{c.qty > 1 ? ` ×${c.qty}` : ""}
                         {c.text && <span style={{ color: TEXT.faint }}>: {c.text}</span>}
                       </div>
-                      <button className="no-print" onClick={() => updateCustomItem(c.id, { qty: Math.max(0, c.qty - 1) })} title="Use one — removes it once its quantity hits 0" style={{ flexShrink: 0, background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "3px 10px", fontSize: 13 }}>Use</button>
+                      <button className="no-print" onClick={() => useCustomConsumable(c.id, c.name, c.qty)} title="Use one — removes it once its quantity hits 0" style={{ flexShrink: 0, background: "transparent", border: `0.5px solid ${BORDER}`, borderRadius: 6, color: "#e0785a", padding: "3px 10px", fontSize: 13 }}>Use</button>
                     </div>
                   ))}
                 </div>
